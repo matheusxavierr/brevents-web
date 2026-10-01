@@ -1,69 +1,7 @@
-import Image from "next/image";
+import Link from "next/link";
+import { ArrowRight, BarChart3, MessagesSquare, Radio, ShieldCheck, Users } from "lucide-react";
+import { HomeHeader } from "@/components/home-header";
 
 export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+  return <><HomeHeader /><main><section className="home-hero"><div className="container home-hero-grid"><div><p className="eyebrow">Eventos e reuniões em uma só plataforma</p><h1>Ao vivo com direção. Perto mesmo à distância.</h1><p>Crie web events completos ou abra reuniões colaborativas com tecnologia Zoom, identidade própria e operação centralizada.</p><div className="hero-actions"><Link className="button button-primary" href="/servicos/web-events">Criar Web Event <ArrowRight size={17} /></Link><Link className="button button-secondary" href="/servicos/meetings">Criar Meeting</Link></div></div><div className="home-stage"><span className="live-pill"><span className="live-dot" /> No ar</span><div><small>PALCO PRINCIPAL · 320 ASSISTINDO</small><h2>Experiências que colocam pessoas no centro.</h2></div><div className="home-stage-bars"><i /><i /><i /><i /><i /></div></div></div></section><section className="container home-products"><article><Radio size={26} /><p className="eyebrow">Web Events</p><h2>Transmita para uma audiência.</h2><p>Inscrições, agenda, palco moderado, chat, perguntas, tradução e conteúdo on-demand.</p><Link href="/servicos/web-events">Conhecer Web Events <ArrowRight size={15} /></Link></article><article><Users size={26} /><p className="eyebrow">Meetings</p><h2>Encontre e colabore.</h2><p>Salas com câmera, microfone, compartilhamento e moderação para conversas de verdade.</p><Link href="/servicos/meetings">Conhecer Meetings <ArrowRight size={15} /></Link></article></section><section className="container home-capabilities"><div><ShieldCheck /><strong>White-label</strong><span>Sua marca em cada ponto de contato.</span></div><div><MessagesSquare /><strong>Interação</strong><span>Chat, Q&A, enquetes e palco.</span></div><div><BarChart3 /><strong>Dados</strong><span>Inscrições, audiência e engajamento.</span></div></section></main></>;
 }

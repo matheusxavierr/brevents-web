@@ -1,36 +1,44 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# BR Events Web
 
-## Getting Started
+Frontend da plataforma BR Events, construído com Next.js 16, React 19 e TypeScript.
 
-First, run the development server:
+O sistema visual segue uma linguagem suave de régua de transmissão: Baloo 2 nos títulos, Archivo no conteúdo, IBM Plex Mono nos dados ao vivo e a paleta Estúdio/Papel/Tally/Sinal/Régua.
+
+## Executar localmente
+
+Pré-requisitos: Node.js 20.9 ou superior e a API BR Events disponível em `http://127.0.0.1:8000`.
 
 ```bash
+copy .env.example .env.local
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Acesse [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Experiências disponíveis
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `/entrar` e `/criar-conta` — autenticação com sessão em cookies HTTP-only
+- `/eventos/[slug]` — página pública alimentada pela API
+- `/eventos/[slug]/inscricao` — cadastro de conta e inscrição no evento
+- `/eventos/[slug]/agenda` — programação publicada
+- `/eventos/[slug]/ao-vivo` — transmissão, presença, chat, Q&A e enquetes em tempo real
+- `/eventos/[slug]/gravacoes` — catálogo on-demand
+- `/painel` — operação completa de eventos, participantes, agenda, salas, interações, gravações e analytics
+- `/painel/eventos/novo` — criação guiada de evento
 
-## Learn More
+## Usuários locais
 
-To learn more about Next.js, take a look at the following resources:
+Depois de executar `python manage.py seed_demo` na API:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- organizador: `organizador` / `Brevents#2026`
+- participante: `participante` / `Brevents#2026`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Os tokens JWT não ficam expostos ao JavaScript do navegador: o Next atua como BFF e mantém acesso e renovação em cookies HTTP-only.
 
-## Deploy on Vercel
+## Verificação
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run lint
+npm run build
+```

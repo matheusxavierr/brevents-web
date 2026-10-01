@@ -32,6 +32,15 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+
+# local visual checks
+*-desktop.png
+*-mobile.png
+*-mobile*.png
+.next-dev*.log
+.chrome-check*/
+.chrome-*/
 
 # vercel
 .vercel
