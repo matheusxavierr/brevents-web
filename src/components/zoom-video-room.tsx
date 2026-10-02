@@ -813,7 +813,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false }: { session: Zo
       {mediaRequest && <div className="stage-invite" role="dialog" aria-label="Solicitação do organizador"><strong>Solicitação do organizador</strong><span>{mediaRequest.control === "audio" ? "Ligar seu microfone?" : mediaRequest.control === "video" ? "Ligar sua câmera?" : "Compartilhar sua tela?"}</span><div><button type="button" className="button button-primary" onClick={acceptMediaRequest}>Aceitar</button><button type="button" className="button button-secondary" onClick={() => setMediaRequest(null)}>Agora não</button></div></div>}
       {captionLanguage && liveCaption?.translations[captionLanguage] && <div className="live-caption-overlay" aria-live="polite" aria-atomic="true">
         <strong>{liveCaption.speaker_name}</strong>
-        <span>{liveCaption.translations[captionLanguage]}</span>
+        <span dir="auto">{liveCaption.translations[captionLanguage]}</span>
       </div>}
       {role === "host" && participantPanelOpen && <aside id="zoom-participant-directory" className="zoom-participant-panel" role="dialog" aria-modal="false" aria-label="Gerenciar participantes">
         <header>

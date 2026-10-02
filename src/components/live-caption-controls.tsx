@@ -29,7 +29,30 @@ declare global {
 const languageLabels: Record<CaptionLanguage, string> = {
   "pt-BR": "Português",
   "en-US": "English",
+  "es-ES": "Español",
+  "ar-SA": "العربية",
 };
+
+const languageShortLabels: Record<CaptionLanguage, string> = {
+  "pt-BR": "PT",
+  "en-US": "EN",
+  "es-ES": "ES",
+  "ar-SA": "AR",
+};
+
+const captionLanguages = Object.keys(languageLabels) as CaptionLanguage[];
+
+function isCaptionLanguage(value: string | null): value is CaptionLanguage {
+  return value !== null && captionLanguages.includes(value as CaptionLanguage);
+}
+
+function browserLanguage(): CaptionLanguage {
+  const language = navigator.language.toLowerCase();
+  if (language.startsWith("en")) return "en-US";
+  if (language.startsWith("es")) return "es-ES";
+  if (language.startsWith("ar")) return "ar-SA";
+  return "pt-BR";
+}
 
 type Props = {
   canSpeak: boolean;
@@ -50,20 +73,18 @@ export function LiveCaptionControls({
   const restartTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const translationQueue = useRef(Promise.resolve());
   const [menuOpen, setMenuOpen] = useState(false);
-  const [spokenLanguage, setSpokenLanguage] = useState<CaptionLanguage>("pt-BR");
+  const [spokenLanguage, setSpokenLanguage] = useState<CaptionLanguage>(() => {
+    if (typeof window === "undefined") return "pt-BR";
+    const savedLanguage = window.localStorage.getItem("brevents-spoken-language");
+    return isCaptionLanguage(savedLanguage) ? savedLanguage : browserLanguage();
+  });
   const [recognitionSupported, setRecognitionSupported] = useState(true);
   const [recognitionError, setRecognitionError] = useState("");
 
   useEffect(() => {
     const savedCaptionLanguage = window.localStorage.getItem("brevents-caption-language");
-    if (savedCaptionLanguage === "pt-BR" || savedCaptionLanguage === "en-US") {
+    if (isCaptionLanguage(savedCaptionLanguage)) {
       onCaptionLanguageChange(savedCaptionLanguage);
-    }
-    const savedSpokenLanguage = window.localStorage.getItem("brevents-spoken-language");
-    if (savedSpokenLanguage === "pt-BR" || savedSpokenLanguage === "en-US") {
-      setSpokenLanguage(savedSpokenLanguage);
-    } else if (navigator.language.toLowerCase().startsWith("en")) {
-      setSpokenLanguage("en-US");
     }
   }, [onCaptionLanguageChange]);
 
@@ -87,11 +108,10 @@ export function LiveCaptionControls({
     if (!canSpeak || !microphoneOn) return;
     const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
     if (!Recognition) {
-      setRecognitionSupported(false);
-      return;
+      const unsupportedTimer = window.setTimeout(() => setRecognitionSupported(false), 0);
+      return () => window.clearTimeout(unsupportedTimer);
     }
-    setRecognitionSupported(true);
-    setRecognitionError("");
+    const errorResetTimer = window.setTimeout(() => setRecognitionError(""), 0);
     const recognition = new Recognition();
     let active = true;
     recognition.continuous = true;
@@ -130,10 +150,11 @@ export function LiveCaptionControls({
       recognition.start();
     } catch (startError) {
       console.error("Não foi possível iniciar a transcrição no navegador.", startError);
-      setRecognitionError("Não foi possível iniciar a transcrição.");
+      window.setTimeout(() => setRecognitionError("Não foi possível iniciar a transcrição."), 0);
     }
     return () => {
       active = false;
+      window.clearTimeout(errorResetTimer);
       if (restartTimer.current) clearTimeout(restartTimer.current);
       recognition.onend = null;
       recognition.stop();
@@ -154,19 +175,19 @@ export function LiveCaptionControls({
 
   return <div className="live-caption-control" ref={menu}>
     <button type="button" className={captionLanguage ? "active" : "muted"} onClick={() => setMenuOpen((open) => !open)} aria-expanded={menuOpen} aria-controls="live-caption-menu">
-      <Captions size={19} /><span>{captionLanguage ? `CC: ${captionLanguage === "pt-BR" ? "PT" : "EN"}` : "Legendas"}</span>
+      <Captions size={19} /><span>{captionLanguage ? `CC: ${languageShortLabels[captionLanguage]}` : "Legendas"}</span>
     </button>
     {menuOpen && <div className="live-caption-menu" id="live-caption-menu" role="dialog" aria-label="Configurar legendas">
       <header><span><Captions size={18} /><strong>Legendas</strong></span><button type="button" onClick={() => setMenuOpen(false)} aria-label="Fechar"><X size={16} /></button></header>
       <p>Em qual idioma você quer ler?</p>
       <div className="live-caption-options">
         <button type="button" className={!captionLanguage ? "selected" : ""} onClick={() => selectCaptionLanguage(null)}>Desligadas</button>
-        {(Object.keys(languageLabels) as CaptionLanguage[]).map((language) => <button type="button" className={captionLanguage === language ? "selected" : ""} onClick={() => selectCaptionLanguage(language)} key={language}>{languageLabels[language]}</button>)}
+        {captionLanguages.map((language) => <button type="button" className={captionLanguage === language ? "selected" : ""} onClick={() => selectCaptionLanguage(language)} key={language}>{languageLabels[language]}</button>)}
       </div>
       {canSpeak && <div className="live-caption-speaker-setting">
         <span><Languages size={16} /><span><strong>Idioma da minha fala</strong><small>Defina uma vez para melhorar a transcrição.</small></span></span>
         <select value={spokenLanguage} onChange={(event) => selectSpokenLanguage(event.target.value as CaptionLanguage)} aria-label="Idioma da minha fala">
-          {(Object.keys(languageLabels) as CaptionLanguage[]).map((language) => <option value={language} key={language}>{languageLabels[language]}</option>)}
+          {captionLanguages.map((language) => <option value={language} key={language}>{languageLabels[language]}</option>)}
         </select>
       </div>}
       {canSpeak && microphoneOn && recognitionSupported && <small className="live-caption-listening"><span /> Transcrevendo seu microfone</small>}
