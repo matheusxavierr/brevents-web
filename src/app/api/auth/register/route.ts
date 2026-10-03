@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   const tokenResponse = await fetch(`${API_URL}/auth/token/`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username: user.username, password: payload.password }),
+    body: JSON.stringify({ email: user.email, password: payload.password }),
     cache: "no-store",
   });
   const tokens = await tokenResponse.json();

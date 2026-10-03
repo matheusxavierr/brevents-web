@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { API_URL, setAuthCookies } from "@/lib/backend-proxy";
 
 export async function POST(request: Request) {
-  const payload = (await request.json()) as { username?: string; password?: string };
+  const payload = (await request.json()) as { email?: string; password?: string };
   const tokenResponse = await fetch(`${API_URL}/auth/token/`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
