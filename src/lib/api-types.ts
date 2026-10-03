@@ -86,7 +86,7 @@ export type ZoomJoinResponse = {
   participant_directory: ParticipantDirectoryEntry[];
 };
 
-export type CaptionLanguage = "pt-BR" | "en-US";
+export type CaptionLanguage = "pt-BR" | "en-US" | "es-ES" | "ar-SA";
 
 export type LiveCaption = {
   id: string;

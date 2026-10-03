@@ -3,7 +3,7 @@
 import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, LoaderCircle } from "lucide-react";
+import { ArrowRight, CircleAlert, LoaderCircle } from "lucide-react";
 import { readError } from "@/lib/api-client";
 
 export function AuthForm({ mode, nextPath = "/", defaultAccountType = "attendee" }: { mode: "login" | "register"; nextPath?: string; defaultAccountType?: "attendee" | "organizer" }) {
@@ -23,7 +23,7 @@ export function AuthForm({ mode, nextPath = "/", defaultAccountType = "attendee"
     });
     const data = await response.json().catch(() => null);
     if (!response.ok) {
-      setError(response.status === 401 ? "Usuário ou senha inválidos." : readError(data));
+      setError(response.status === 401 ? "E-mail ou senha inválidos." : readError(data));
       setLoading(false);
       return;
     }
@@ -40,16 +40,16 @@ export function AuthForm({ mode, nextPath = "/", defaultAccountType = "attendee"
         </>
       )}
       <label className="field">
-        <span>{mode === "login" ? "Usuário" : "E-mail"}</span>
+        <span>E-mail</span>
         <input
-          name={mode === "login" ? "username" : "email"}
-          type={mode === "login" ? "text" : "email"}
+          name="email"
+          type="email"
           autoComplete={mode === "login" ? "username" : "email"}
           required
         />
       </label>
       <label className="field"><span>Senha</span><input name="password" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} minLength={8} required /></label>
-      {error && <p className="form-error" role="alert">{error}</p>}
+      {error && <p className="form-error" role="alert"><CircleAlert size={18} /> {error}</p>}
       <button className="button button-primary button-full" type="submit" disabled={loading}>
         {loading ? <LoaderCircle className="spin" size={18} /> : <ArrowRight size={18} />}
         {mode === "login" ? "Entrar" : "Criar minha conta"}

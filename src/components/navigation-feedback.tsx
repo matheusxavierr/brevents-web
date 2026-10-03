@@ -49,7 +49,7 @@ export function NavigationFeedback() {
   return (
     <>
       {pathname !== "/" && <button className="route-back-button" type="button" onClick={goBack} aria-label="Voltar para a página anterior"><ArrowLeft size={17} /><span>Voltar</span></button>}
-      {navigating && <div className="navigation-overlay" role="status" aria-live="polite" aria-label="Carregando página"><span className="navigation-spinner" /><strong>Abrindo página…</strong></div>}
+      {navigating && <div className="navigation-progress" role="status" aria-live="polite"><span aria-hidden="true" /><span className="sr-only">Abrindo página…</span></div>}
     </>
   );
 }

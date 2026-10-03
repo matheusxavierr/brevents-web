@@ -15,7 +15,7 @@ export async function getPublicEvent(slug: string): Promise<EventData | null> {
     if (!managedResponse.ok) return null;
     const managed = (await managedResponse.json()) as Paginated<EventData>;
     const event = managed.results.find((item) => item.slug === slug);
-    if (!event) return null;
+    if (!event || event.status === "ended" || event.status === "archived") return null;
 
     const [roomResponse, sessionResponse, recordingResponse] = await Promise.all([
       fetch(`${API_URL}/rooms/?event=${event.id}`, { headers, cache: "no-store" }),

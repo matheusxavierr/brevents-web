@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, Send, ThumbsUp } from "lucide-react";
 import { Brand } from "./brand";
+import { EventUnavailable } from "./event-unavailable";
 import { ZoomVideoRoom } from "./zoom-video-room";
 import { apiClient } from "@/lib/api-client";
 import type { ChatChannel, ChatMessage, EventData, Paginated, Poll, Question, User } from "@/lib/api-types";
@@ -29,6 +30,7 @@ export function ConnectedLiveExperience({ event }: { event: EventData }) {
   const [question, setQuestion] = useState("");
   const [error, setError] = useState("");
   const [connected, setConnected] = useState(false);
+  const [eventEnded, setEventEnded] = useState(false);
   const socket = useRef<WebSocket | null>(null);
   const requestId = useRef(1);
 
@@ -36,6 +38,20 @@ export function ConnectedLiveExperience({ event }: { event: EventData }) {
     const streamModule = room?.module_config?.find((item) => item.type === "livestream.youtube");
     return typeof streamModule?.config.video_id === "string" ? streamModule.config.video_id : null;
   }, [room]);
+
+  useEffect(() => {
+    if (event.status !== "published") return;
+    const checkAvailability = async () => {
+      try {
+        const response = await fetch(`/api/backend/public/events/${encodeURIComponent(event.slug)}/`, { cache: "no-store" });
+        if (response.status === 404 || response.status === 410) setEventEnded(true);
+      } catch (reason) {
+        console.error("Não foi possível verificar a disponibilidade do evento.", reason);
+      }
+    };
+    const timer = window.setInterval(() => void checkAvailability(), 8_000);
+    return () => window.clearInterval(timer);
+  }, [event.slug, event.status]);
 
   useEffect(() => {
     if (!publicRoom) return;
@@ -130,6 +146,7 @@ export function ConnectedLiveExperience({ event }: { event: EventData }) {
     setPolls((current) => current.map((candidate) => candidate.id === poll.id ? updated : candidate));
   }
 
+  if (eventEnded) return <EventUnavailable ended />;
   if (!room) return <main className="empty-state"><h1>Nenhuma sala disponível</h1><Link className="button button-secondary" href={`/eventos/${event.slug}`}>Voltar ao evento</Link></main>;
 
   return <main className="live-page"><header className="live-header"><div className="container live-header-inner"><Brand /><span className="live-header-title">{event.name} · {room.name}</span><Link className="button live-exit" href={`/eventos/${event.slug}`}><ChevronLeft size={16} /> Sair da sala</Link></div></header><div className="live-layout"><section className="video-column" aria-label="Transmissão ao vivo"><div className="video-player">{accessGranted && room.zoom_session ? <ZoomVideoRoom session={room.zoom_session} eventId={event.id} guest={guest} /> : !accessGranted ? <div className="video-center"><h1>Inscrição necessária</h1><p>Confirme seu nome e e-mail antes de entrar na transmissão.</p><Link className="button button-primary" href={`/eventos/${event.slug}/inscricao`}>Fazer inscrição</Link></div> : youtubeId ? <iframe className="video-embed" src={`https://www.youtube-nocookie.com/embed/${youtubeId}?autoplay=0`} title={session?.title ?? event.name} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen /> : <div className="video-center"><span className="live-pill"><span className="live-dot" /> Transmissão</span><h1>{session?.title ?? event.name}</h1><p>{session?.speakers_detail.map((speaker) => speaker.name).join(" e ")}</p></div>}</div><div className="session-bar"><div><h2>{session?.title ?? event.name}</h2><p>{room.name} · {guest ? "modo espectador" : connected ? "conectado em tempo real" : "conectando..."}</p></div></div>{error && <p className="live-error" role="alert">{error} <Link href={`/eventos/${event.slug}/inscricao`}>Ver inscrição</Link></p>}</section><aside className="interaction-panel">{guest ? <div className="guest-interaction"><p className="eyebrow">Modo espectador</p><h2>Quer participar da conversa?</h2><p>Crie uma conta gratuita para usar chat, perguntas e receber convites para subir ao palco.</p><Link className="button button-primary" href={`/criar-conta?next=/eventos/${event.slug}/ao-vivo`}>Criar conta</Link><Link className="button button-secondary" href={`/entrar?next=/eventos/${event.slug}/ao-vivo`}>Já tenho conta</Link></div> : <><div className="interaction-tabs" role="tablist">{(["chat", "questions", "poll"] as Tab[]).map((item) => <button key={item} className={`interaction-tab${tab === item ? " active" : ""}`} role="tab" aria-selected={tab === item} onClick={() => setTab(item)}>{item === "chat" ? "Chat" : item === "questions" ? "Perguntas" : "Enquete"}</button>)}</div><div className="interaction-content">
