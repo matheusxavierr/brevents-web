@@ -6,16 +6,16 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState } from "react";
 
 import { ApiError, apiClient } from "@/lib/api-client";
-import type { ChatChannel, ChatMessage, EventData, LiveCaption, Paginated, User } from "@/lib/api-types";
+import type { ChatChannel, ChatMessage, EventData, LiveCaption, Paginated, Room, User } from "@/lib/api-types";
 import { Brand } from "./brand";
 import { ZoomVideoRoom } from "./zoom-video-room";
 
 type MeetingTab = "chat" | "transcript";
 type JoinResponse = { token: string };
 
-export function ConnectedMeetingExperience({ event }: { event: EventData }) {
+export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/", onExit }: { event: EventData; roomOverride?: Room; exitHref?: string; onExit?: () => void }) {
   const router = useRouter();
-  const room = event.rooms?.find((item) => item.mode === "meeting" && item.zoom_session) ?? event.rooms?.[0];
+  const room = roomOverride ?? event.rooms?.find((item) => item.mode === "meeting" && item.zoom_session) ?? event.rooms?.[0];
   const [user, setUser] = useState<User | null>(null);
   const [accessGranted, setAccessGranted] = useState(false);
   const [channel, setChannel] = useState<ChatChannel | null>(null);
@@ -165,7 +165,7 @@ export function ConnectedMeetingExperience({ event }: { event: EventData }) {
           <button className="button meeting-copy-link" type="button" onClick={copyMeetingLink}>
             {copied ? <Check size={16} /> : <Copy size={16} />} {copied ? "Link copiado" : "Compartilhar"}
           </button>
-          <Link className="button live-exit" href="/"><ChevronLeft size={16} /> Sair da sala</Link>
+          {onExit ? <button className="button live-exit" type="button" onClick={onExit}><ChevronLeft size={16} /> Encerrar conversa</button> : <Link className="button live-exit" href={exitHref}><ChevronLeft size={16} /> Sair da sala</Link>}
         </div>
       </header>
       <div className="live-layout">

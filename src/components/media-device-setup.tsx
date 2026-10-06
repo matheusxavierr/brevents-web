@@ -1,6 +1,6 @@
 "use client";
 
-import { Camera, CameraOff, Mic, MicOff } from "lucide-react";
+import { Camera, CameraOff, LoaderCircle, Mic, MicOff } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 export type VirtualBackgroundMode = "none" | "blur";
@@ -33,10 +33,12 @@ type MediaDeviceSetupProps = {
 export function MediaDeviceSetup({ value, onChange, active = true, stopPreviewRef }: MediaDeviceSetupProps) {
   const preview = useRef<HTMLDivElement>(null);
   const audioStream = useRef<MediaStream | null>(null);
+  const videoStream = useRef<MediaStream | null>(null);
   const videoTrack = useRef<ReturnType<typeof import("@zoom/videosdk")["default"]["createLocalVideoTrack"]> | null>(null);
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [error, setError] = useState("");
+  const [previewState, setPreviewState] = useState<"off" | "loading" | "ready" | "error">("off");
 
   useEffect(() => {
     let cancelled = false;
@@ -65,10 +67,24 @@ export function MediaDeviceSetup({ value, onChange, active = true, stopPreviewRe
     async function stopPreview() {
       audioStream.current?.getTracks().forEach((track) => track.stop());
       audioStream.current = null;
+      videoStream.current?.getTracks().forEach((track) => track.stop());
+      videoStream.current = null;
       const activeVideoTrack = videoTrack.current;
       videoTrack.current = null;
-      if (activeVideoTrack) await activeVideoTrack.stop();
+      const nativePlayer = preview.current?.querySelector("video");
+      if (nativePlayer) nativePlayer.srcObject = null;
       preview.current?.replaceChildren();
+      if (activeVideoTrack) {
+        try {
+          const result = await activeVideoTrack.stop();
+          if (result instanceof Error && result.message !== "VideoNotStartedError") throw result;
+        } catch (reason) {
+          const message = reason instanceof Error ? reason.message : String(reason);
+          if (!message.includes("VideoNotStartedError")) {
+            console.warn("Não foi possível encerrar a prévia da câmera.", reason);
+          }
+        }
+      }
     }
 
     if (stopPreviewRef) stopPreviewRef.current = stopPreview;
@@ -76,7 +92,11 @@ export function MediaDeviceSetup({ value, onChange, active = true, stopPreviewRe
     async function updatePreview() {
       await stopPreview();
       setError("");
-      if (!active || (!value.audioEnabled && !value.videoEnabled)) return;
+      setPreviewState(value.videoEnabled ? "loading" : "off");
+      if (!active || (!value.audioEnabled && !value.videoEnabled)) {
+        setPreviewState("off");
+        return;
+      }
 
       try {
         if (value.audioEnabled) {
@@ -88,17 +108,45 @@ export function MediaDeviceSetup({ value, onChange, active = true, stopPreviewRe
           else audioStream.current = nextAudioStream;
         }
         if (value.videoEnabled && !cancelled && preview.current) {
-          const zoom = await import("@zoom/videosdk");
-          const track = zoom.default.createLocalVideoTrack(value.videoDeviceId || undefined);
-          const player = document.createElement("video-player");
-          player.setAttribute("aria-label", "Prévia da câmera");
-          preview.current.replaceChildren(player);
-          videoTrack.current = track;
-          const result = await track.start(
-            player as Parameters<typeof track.start>[0],
-            value.virtualBackgroundMode === "blur" ? { imageUrl: "blur", cropped: true } : undefined,
-          );
-          if (result instanceof Error) throw result;
+          if (value.virtualBackgroundMode === "blur") {
+            const zoom = await import("@zoom/videosdk");
+            zoom.default.preloadDependentAssets();
+            const track = zoom.default.createLocalVideoTrack(value.videoDeviceId || undefined);
+            const playerContainer = document.createElement("video-player-container");
+            const player = document.createElement("video-player");
+            player.setAttribute("aria-label", "Prévia da câmera com fundo desfocado");
+            playerContainer.appendChild(player);
+            preview.current.replaceChildren(playerContainer);
+            videoTrack.current = track;
+            const result = await track.start(
+              player as Parameters<typeof track.start>[0],
+              { imageUrl: "blur", cropped: true },
+            );
+            if (result instanceof Error) throw result;
+          } else {
+            const nextVideoStream = await navigator.mediaDevices.getUserMedia({
+              audio: false,
+              video: {
+                deviceId: value.videoDeviceId ? { exact: value.videoDeviceId } : undefined,
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+              },
+            });
+            if (cancelled) {
+              nextVideoStream.getTracks().forEach((track) => track.stop());
+              return;
+            }
+            const player = document.createElement("video");
+            player.autoplay = true;
+            player.muted = true;
+            player.playsInline = true;
+            player.setAttribute("aria-label", "Prévia da câmera");
+            player.srcObject = nextVideoStream;
+            preview.current.replaceChildren(player);
+            videoStream.current = nextVideoStream;
+            await player.play();
+          }
+          if (!cancelled) setPreviewState("ready");
         }
         const devices = await navigator.mediaDevices.enumerateDevices();
         if (!cancelled) {
@@ -107,7 +155,11 @@ export function MediaDeviceSetup({ value, onChange, active = true, stopPreviewRe
         }
       } catch (reason) {
         console.error("Não foi possível abrir os dispositivos selecionados.", reason);
-        setError("Não foi possível acessar a câmera ou o microfone. Verifique a permissão do navegador.");
+        await stopPreview();
+        if (!cancelled) {
+          setPreviewState("error");
+          setError("Não foi possível acessar a câmera ou o microfone. Verifique a permissão do navegador.");
+        }
       }
     }
 
@@ -125,9 +177,11 @@ export function MediaDeviceSetup({ value, onChange, active = true, stopPreviewRe
 
   return (
     <div className="media-device-setup">
-      <div className={`media-preview${value.videoEnabled ? " camera-on" : ""}`}>
+      <div className={`media-preview${previewState === "ready" ? " camera-on" : ""}`} aria-busy={previewState === "loading"}>
         <div className="media-preview-player" ref={preview} />
-        {!value.videoEnabled && <div><CameraOff size={30} /><span>Câmera desligada</span></div>}
+        {previewState === "off" && <div><CameraOff size={30} /><span>Câmera desligada</span></div>}
+        {previewState === "loading" && <div className="media-preview-status" role="status"><LoaderCircle className="spin" size={28} /><span>Abrindo câmera…</span></div>}
+        {previewState === "error" && <div className="media-preview-status error"><CameraOff size={30} /><span>Prévia indisponível</span></div>}
       </div>
       <div className="media-device-controls">
         <div className="media-toggle-row">

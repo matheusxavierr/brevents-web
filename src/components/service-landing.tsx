@@ -13,8 +13,9 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
+import { apiClient } from "@/lib/api-client";
 import type { User } from "@/lib/api-types";
 import { HomeHeader } from "./home-header";
 
@@ -52,7 +53,8 @@ export function ServiceLanding({ kind }: { kind: "event" | "meeting" }) {
 
   const isEvent = kind === "event";
   const features = isEvent ? eventFeatures : meetingFeatures;
-  const canCreate = user?.account_type === "organizer" || user?.is_superuser;
+  const canCreateEvent = user?.account_type === "organizer" || user?.is_staff || user?.is_superuser;
+  const canCreate = isEvent ? canCreateEvent : Boolean(user);
   const createPath = isEvent ? "/painel" : "/meetings/novo";
 
   return (
@@ -77,15 +79,18 @@ export function ServiceLanding({ kind }: { kind: "event" | "meeting" }) {
               <Link className="button button-primary service-primary-action" href={createPath}>
                 Criar agora <ArrowRight size={17} />
               </Link>
+            ) : isEvent ? (
+              <p className="service-access-note">A criação e a operação de Web Events são realizadas pela equipe organizadora da BR Events.</p>
             ) : (
               <>
-                <Link className="button button-primary service-primary-action" href={`/criar-conta?tipo=organizer&next=${encodeURIComponent(createPath)}`}>
+                <Link className="button button-primary service-primary-action" href={`/criar-conta?next=${encodeURIComponent(createPath)}`}>
                   Criar conta para começar <ArrowRight size={17} />
                 </Link>
                 <Link className="button button-secondary" href={`/entrar?next=${encodeURIComponent(createPath)}`}>Já tenho conta</Link>
               </>
             )}
           </div>
+          {isEvent && !canCreateEvent && <WebEventConsultation />}
         </section>
 
         <section className="container service-features" aria-label="Recursos do serviço">
@@ -122,5 +127,69 @@ export function ServiceLanding({ kind }: { kind: "event" | "meeting" }) {
         </section>
       </main>
     </>
+  );
+}
+
+function WebEventConsultation() {
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitting(true);
+    setError("");
+    const data = Object.fromEntries(new FormData(event.currentTarget));
+
+    try {
+      await apiClient("web-event-inquiries/", {
+        method: "POST",
+        body: {
+          name: String(data.name),
+          email: String(data.email),
+          company: String(data.company || ""),
+          phone: String(data.phone || ""),
+          message: String(data.message || ""),
+        },
+      });
+      setSubmitted(true);
+      event.currentTarget.reset();
+    } catch (reason) {
+      console.error("Não foi possível enviar o interesse em Web Event.", reason);
+      setError("Não foi possível enviar agora. Tente novamente em instantes.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <section className="web-event-consultation" aria-labelledby="web-event-consultation-title">
+      <div>
+        <p className="eyebrow">Organize com a BR Events</p>
+        <h2 id="web-event-consultation-title">Quer realizar um evento pela plataforma?</h2>
+        <p>A gente configura sua conta organizadora, prepara o ambiente e acompanha sua equipe até o evento estar no ar.</p>
+        <ol>
+          <li><span>01</span> Você conta o que precisa.</li>
+          <li><span>02</span> Nossa equipe cria e configura sua conta.</li>
+          <li><span>03</span> Planejamos a transmissão junto com você.</li>
+        </ol>
+      </div>
+      {submitted ? (
+        <div className="web-event-consultation-success" role="status">
+          <strong>Recebemos seu interesse.</strong>
+          <p>Nossa equipe vai analisar as informações e seguir com você para estruturar o evento.</p>
+        </div>
+      ) : (
+        <form onSubmit={submit} className="web-event-consultation-form">
+          <label className="field"><span>Nome</span><input name="name" autoComplete="name" required /></label>
+          <label className="field"><span>E-mail profissional</span><input name="email" type="email" autoComplete="email" required /></label>
+          <label className="field"><span>Empresa</span><input name="company" autoComplete="organization" /></label>
+          <label className="field"><span>Telefone</span><input name="phone" type="tel" autoComplete="tel" /></label>
+          <label className="field field-wide"><span>Como imagina seu evento?</span><textarea name="message" rows={3} maxLength={1200} placeholder="Ex.: evento para 500 pessoas, com inscrições e transmissão ao vivo." /></label>
+          {error && <p className="form-error field-wide" role="alert">{error}</p>}
+          <button className="button button-primary field-wide" type="submit" disabled={submitting}>{submitting ? "Enviando…" : "Quero falar com a equipe"} <ArrowRight size={17} /></button>
+        </form>
+      )}
+    </section>
   );
 }

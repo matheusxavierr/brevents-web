@@ -26,10 +26,6 @@ export function CreateMeetingFlow() {
           return;
         }
         const user = await response.json() as User;
-        if (user.account_type !== "organizer" && !user.is_superuser) {
-          router.replace("/servicos/meetings");
-          return;
-        }
         const ownerName = user.first_name || user.name || user.username;
         const name = `Reunião de ${ownerName}`;
         const slug = `${slugify(name) || "reuniao"}-${Date.now().toString(36)}`;

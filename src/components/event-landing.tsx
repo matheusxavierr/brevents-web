@@ -33,6 +33,7 @@ export function EventLanding({ event }: { event: EventData }) {
               <div className="hero-actions">
                 <Link className="button button-primary" href={`/eventos/${event.slug}/inscricao`}>Inscreva-se <ArrowRight size={17} /></Link>
                 <Link className="button button-secondary" href={`/eventos/${event.slug}/agenda`}>Ver programação</Link>
+                <Link className="button button-quiet" href={`/eventos/${event.slug}/lobby`}>Entrar no lobby</Link>
               </div>
               <div className="event-meta" aria-label="Informações do evento">
                 <span><CalendarDays size={16} /> {eventDate(event)}</span>

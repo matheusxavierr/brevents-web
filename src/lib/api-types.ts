@@ -38,6 +38,8 @@ export type Room = {
   name: string;
   description: string;
   mode: "event" | "meeting";
+  purpose?: "main" | "networking";
+  visibility?: "public" | "restricted";
   capacity: number | null;
   position: number;
   module_config?: Array<{ type: string; config: Record<string, unknown> }>;
@@ -101,13 +103,33 @@ export type LiveCaption = {
 
 export type Organization = {
   id: string;
+  owner?: Pick<User, "id" | "username" | "first_name" | "last_name" | "email">;
+  can_manage?: boolean;
+  can_edit?: boolean;
   name: string;
   slug: string;
   description: string;
+  logo_url: string;
+  cover_image_url: string;
+  headline: string;
+  contact_email: string;
+  contact_phone: string;
+  website_url: string;
+  social_links: Record<string, string>;
   custom_domain: string | null;
   branding: Record<string, string>;
   feature_flags: Record<string, boolean>;
   events: EventData[];
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type OrganizationMembership = {
+  id: number;
+  organization: string;
+  user: number;
+  user_detail: Pick<User, "id" | "username" | "first_name" | "last_name" | "email">;
+  role: "owner" | "admin" | "editor" | "viewer";
 };
 
 export type Speaker = {
@@ -145,6 +167,32 @@ export type Registration = {
   ticket_code: string;
   profile: Record<string, string>;
   created_at: string;
+};
+
+export type NetworkingPresence = {
+  id: string;
+  event: string;
+  registration: string;
+  registration_detail: Registration;
+  last_seen_at: string;
+};
+
+export type NetworkingRequest = {
+  id: string;
+  event: string;
+  sender_registration: string;
+  sender_detail: Registration;
+  recipient_registration: string;
+  recipient_detail: Registration;
+  topic: string;
+  status: "pending" | "accepted" | "declined" | "cancelled" | "ended";
+  room: string | null;
+  room_detail: Room | null;
+  responded_at: string | null;
+  last_participant_seen_at: string | null;
+  ended_at: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type Recording = {

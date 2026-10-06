@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
-import { Brand } from "./brand";
+import { HomeHeader } from "./home-header";
 
 export function SiteHeader({ current, eventSlug = "future-summit-2026" }: { current?: "inicio" | "agenda"; eventSlug?: string }) {
   return (
-    <header className="site-header">
+    <><HomeHeader /><header className="site-header">
       <div className="container site-header-inner">
-        <Brand />
+        <Link className="event-header-name" href={`/eventos/${eventSlug}`}>Página do evento</Link>
         <nav className="site-nav" aria-label="Navegação principal">
           <Link href={`/eventos/${eventSlug}`} aria-current={current === "inicio" ? "page" : undefined}>Início</Link>
           <Link href={`/eventos/${eventSlug}/agenda`} aria-current={current === "agenda" ? "page" : undefined}>Programação</Link>
@@ -16,6 +16,6 @@ export function SiteHeader({ current, eventSlug = "future-summit-2026" }: { curr
           </Link>
         </nav>
       </div>
-    </header>
+    </header></>
   );
 }
