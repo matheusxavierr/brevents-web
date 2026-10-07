@@ -13,7 +13,12 @@ export async function apiClient<T>(path: string, options: ApiOptions = {}): Prom
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
   });
   const data = await response.json().catch(() => null);
-  if (!response.ok) throw new ApiError(response.status, data);
+  if (!response.ok) {
+    if (response.status === 401 && typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("brevents:session-expired"));
+    }
+    throw new ApiError(response.status, data);
+  }
   return data as T;
 }
 

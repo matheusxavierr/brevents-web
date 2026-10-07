@@ -25,6 +25,16 @@ export function HomeHeader() {
   }, []);
 
   useEffect(() => {
+    const handleSessionExpired = () => {
+      setUser(null);
+      setProfileOpen(false);
+      setLoaded(true);
+    };
+    window.addEventListener("brevents:session-expired", handleSessionExpired);
+    return () => window.removeEventListener("brevents:session-expired", handleSessionExpired);
+  }, []);
+
+  useEffect(() => {
     if (!profileOpen) return;
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key === "Escape") setProfileOpen(false);

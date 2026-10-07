@@ -5,10 +5,12 @@ import { defaultMediaPreferences, MediaDeviceSetup } from "@/components/media-de
 
 const start = vi.fn();
 const stop = vi.fn();
+const init = vi.fn();
 
 vi.mock("@zoom/videosdk", () => ({
   default: {
     preloadDependentAssets: vi.fn(),
+    createClient: vi.fn(() => ({ init })),
     createLocalVideoTrack: vi.fn(() => ({ start, stop })),
   },
 }));
@@ -17,6 +19,7 @@ describe("prévia de mídia", () => {
   beforeEach(() => {
     start.mockReset().mockResolvedValue(undefined);
     stop.mockReset().mockRejectedValue(new Error("VideoNotStartedError"));
+    init.mockReset().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "mediaDevices", {
       configurable: true,
       value: {

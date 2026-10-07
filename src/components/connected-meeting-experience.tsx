@@ -7,6 +7,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 
 import { ApiError, apiClient } from "@/lib/api-client";
 import type { ChatChannel, ChatMessage, EventData, LiveCaption, Paginated, Room, User } from "@/lib/api-types";
+import { isFatalRealtimeClose, realtimeReconnectDelay, websocketBaseUrl } from "@/lib/realtime";
 import { Brand } from "./brand";
 import { ZoomVideoRoom } from "./zoom-video-room";
 
@@ -24,11 +25,20 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
   const [tab, setTab] = useState<MeetingTab>("chat");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [realtimeNotice, setRealtimeNotice] = useState("");
   const [connected, setConnected] = useState(false);
   const [inRoom, setInRoom] = useState(false);
   const [copied, setCopied] = useState(false);
   const socket = useRef<WebSocket | null>(null);
   const requestId = useRef(1);
+
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      setRealtimeNotice("Sua sessão expirou. Entre novamente para continuar usando chat e transcrição.");
+    };
+    window.addEventListener("brevents:session-expired", handleSessionExpired);
+    return () => window.removeEventListener("brevents:session-expired", handleSessionExpired);
+  }, []);
 
   useEffect(() => {
     if (!room) return;
@@ -81,6 +91,8 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
     if (!room || !inRoom) return;
     const activeRoom = room;
     let cancelled = false;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let reconnectAttempt = 0;
 
     async function connectCollaboration() {
       try {
@@ -100,12 +112,15 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
             .catch(() => undefined);
         }
 
-        const wsBase = process.env.NEXT_PUBLIC_BREVENTS_WS_URL ?? "ws://127.0.0.1:8000/ws";
+        if (cancelled) return;
+        const wsBase = websocketBaseUrl(process.env.NEXT_PUBLIC_BREVENTS_WS_URL);
         const ws = new WebSocket(`${wsBase}/events/${event.id}/?token=${encodeURIComponent(join.token)}`);
         socket.current = ws;
         ws.onopen = () => {
           if (cancelled) return;
+          reconnectAttempt = 0;
           setConnected(true);
+          setRealtimeNotice("");
           ws.send(JSON.stringify(["room.join", requestId.current++, { room: activeRoom.id }]));
           if (activeChannel) ws.send(JSON.stringify(["chat.subscribe", requestId.current++, { channel: activeChannel.id }]));
         };
@@ -116,23 +131,48 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
             setMessages((current) => current.some((item) => item.id === nextMessage.id) ? current : [...current, nextMessage]);
           }
         };
-        ws.onerror = () => setError("A conexão em tempo real foi interrompida.");
-        ws.onclose = () => setConnected(false);
+        // Browsers emit `close` after an error; reconnection is centralized there.
+        ws.onerror = () => undefined;
+        ws.onclose = (closeEvent) => {
+          if (socket.current === ws) socket.current = null;
+          setConnected(false);
+          if (cancelled) return;
+          if (isFatalRealtimeClose(closeEvent.code)) {
+            setRealtimeNotice("Seu acesso ao chat e à transcrição desta reunião foi encerrado.");
+            return;
+          }
+          setRealtimeNotice("Reconectando chat e transcrição…");
+          reconnectTimer = setTimeout(() => {
+            reconnectAttempt += 1;
+            void connectCollaboration();
+          }, realtimeReconnectDelay(reconnectAttempt));
+        };
       } catch (reason) {
         console.error("Não foi possível abrir o chat da reunião.", reason);
-        setError(reason instanceof Error ? reason.message : "Não foi possível abrir o chat da reunião.");
+        if (cancelled) return;
+        if (reason instanceof ApiError && reason.status === 401) {
+          setRealtimeNotice("Sua sessão expirou. Entre novamente para continuar usando chat e transcrição.");
+          return;
+        }
+        setRealtimeNotice("Reconectando chat e transcrição…");
+        reconnectTimer = setTimeout(() => {
+          reconnectAttempt += 1;
+          void connectCollaboration();
+        }, realtimeReconnectDelay(reconnectAttempt));
       }
     }
 
     void connectCollaboration();
     return () => {
       cancelled = true;
-      socket.current?.close();
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      socket.current?.close(1000, "leaving meeting");
       socket.current = null;
       setConnected(false);
       setChannel(null);
       setMessages([]);
       setCaptions([]);
+      setRealtimeNotice("");
     };
   }, [event.id, inRoom, room]);
 
@@ -161,7 +201,7 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
       <header className="live-header">
         <div className="container live-header-inner">
           <Brand />
-          <span className="live-header-title">{event.name} · {inRoom ? connected ? "conectado" : "entrando" : "pré-sala"}</span>
+          <span className="live-header-title">{event.name} · {inRoom ? connected ? "conectado" : "reunião ativa · reconectando chat" : "pré-sala"}</span>
           <button className="button meeting-copy-link" type="button" onClick={copyMeetingLink}>
             {copied ? <Check size={16} /> : <Copy size={16} />} {copied ? "Link copiado" : "Compartilhar"}
           </button>
@@ -176,6 +216,7 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
               : <div className="video-center"><span className="navigation-spinner" /><p>Preparando sua reunião…</p></div>}
           </div>
           {error && <p className="live-error" role="alert">{error}</p>}
+          {realtimeNotice && <p className="live-error" role="status">{realtimeNotice}</p>}
         </section>
         <aside className={`interaction-panel meeting-interaction-panel${inRoom ? "" : " meeting-interaction-locked"}`}>
           {!inRoom ? <div className="meeting-access-locked">

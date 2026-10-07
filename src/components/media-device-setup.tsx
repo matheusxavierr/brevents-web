@@ -35,6 +35,8 @@ export function MediaDeviceSetup({ value, onChange, active = true, stopPreviewRe
   const audioStream = useRef<MediaStream | null>(null);
   const videoStream = useRef<MediaStream | null>(null);
   const videoTrack = useRef<ReturnType<typeof import("@zoom/videosdk")["default"]["createLocalVideoTrack"]> | null>(null);
+  const previewClient = useRef<ReturnType<typeof import("@zoom/videosdk")["default"]["createClient"]> | null>(null);
+  const previewInitialization = useRef<Promise<void> | null>(null);
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [error, setError] = useState("");
@@ -111,6 +113,17 @@ export function MediaDeviceSetup({ value, onChange, active = true, stopPreviewRe
           if (value.virtualBackgroundMode === "blur") {
             const zoom = await import("@zoom/videosdk");
             zoom.default.preloadDependentAssets();
+            if (!previewInitialization.current) {
+              const client = zoom.default.createClient();
+              previewClient.current = client;
+              previewInitialization.current = client
+                .init("en-US", "Global", { patchJsMedia: true, enforceVirtualBackground: true })
+                .then((result) => {
+                  if (result instanceof Error) throw result;
+                });
+            }
+            await previewInitialization.current;
+            if (cancelled) return;
             const track = zoom.default.createLocalVideoTrack(value.videoDeviceId || undefined);
             const playerContainer = document.createElement("video-player-container");
             const player = document.createElement("video-player");

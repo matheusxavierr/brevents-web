@@ -117,6 +117,16 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
   const [noiseSuppressionSupported, setNoiseSuppressionSupported] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+    void import("@zoom/videosdk")
+      .then((zoom) => {
+        if (!cancelled) zoom.default.preloadDependentAssets();
+      })
+      .catch((reason) => console.warn("Não foi possível pré-carregar os recursos do Zoom.", reason));
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
     const stored = window.sessionStorage.getItem("brevents:media-preferences");
     if (!stored) return;
     window.sessionStorage.removeItem("brevents:media-preferences");
@@ -439,8 +449,8 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
     setError("");
     try {
       await stopPreviewRef.current?.();
-      const credentials = guest
-        ? await fetch(`/api/guest/zoom/${session.id}/join`, {
+      const credentialsPromise = guest
+        ? fetch(`/api/guest/zoom/${session.id}/join`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ eventId }),
@@ -449,40 +459,26 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
             if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Não foi possível validar seu ingresso.");
             return data as ZoomJoinResponse;
           })
-        : await apiClient<ZoomJoinResponse>(`zoom-sessions/${session.id}/join/`, { method: "POST" });
-      const zoom = await import("@zoom/videosdk");
+        : apiClient<ZoomJoinResponse>(`zoom-sessions/${session.id}/join/`, { method: "POST" });
+      const [credentials, zoom] = await Promise.all([credentialsPromise, import("@zoom/videosdk")]);
       const client = zoom.default.createClient();
       zoomRef.current = zoom;
       clientRef.current = client;
-      await client.init("en-US", "Global", { patchJsMedia: true, leaveOnPageUnload: true });
-      await client.join(
-        credentials.session_name,
-        credentials.token,
-        credentials.user_name,
-        credentials.session_passcode,
-      );
+      const initialization = client.init("en-US", "Global", {
+        patchJsMedia: true,
+        leaveOnPageUnload: true,
+        enforceVirtualBackground: true,
+      }).then(ensureZoomSuccess);
+      let presence: ZoomPresenceResponse | null = null;
       if (!guest) {
         try {
-          const presence = await apiClient<ZoomPresenceResponse>(`zoom-sessions/${session.id}/presence/claim/`, { method: "POST" });
+          [presence] = await Promise.all([
+            apiClient<ZoomPresenceResponse>(`zoom-sessions/${session.id}/presence/claim/`, { method: "POST" }),
+            initialization,
+          ]);
           presenceToken.current = presence.token;
-          presenceHeartbeatTimer.current = setInterval(() => {
-            apiClient(`zoom-sessions/${session.id}/presence/heartbeat/`, {
-              method: "POST",
-              body: { token: presence.token },
-            }).catch(async (presenceError) => {
-              console.error("A presença desta conexão expirou.", presenceError);
-              if (!(presenceError instanceof ApiError) || presenceError.status !== 409) return;
-              if (presenceHeartbeatTimer.current) clearInterval(presenceHeartbeatTimer.current);
-              presenceHeartbeatTimer.current = null;
-              presenceToken.current = "";
-              try { await client.leave(); } catch { /* A conexão já pode estar fechada. */ }
-              setState("duplicate");
-              onJoinedChange?.(false);
-            });
-          }, Math.max(10_000, (presence.expires_in - 20) * 1_000));
         } catch (presenceError) {
           if (presenceError instanceof ApiError && presenceError.status === 409) {
-            await client.leave();
             clientRef.current = null;
             setState("duplicate");
             onJoinedChange?.(false);
@@ -490,6 +486,31 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
           }
           throw presenceError;
         }
+      } else {
+        await initialization;
+      }
+      await client.join(
+        credentials.session_name,
+        credentials.token,
+        credentials.user_name,
+        credentials.session_passcode,
+      );
+      if (presence) {
+        presenceHeartbeatTimer.current = setInterval(() => {
+          apiClient(`zoom-sessions/${session.id}/presence/heartbeat/`, {
+            method: "POST",
+            body: { token: presence.token },
+          }).catch(async (presenceError) => {
+            console.error("A presença desta conexão expirou.", presenceError);
+            if (!(presenceError instanceof ApiError) || presenceError.status !== 409) return;
+            if (presenceHeartbeatTimer.current) clearInterval(presenceHeartbeatTimer.current);
+            presenceHeartbeatTimer.current = null;
+            presenceToken.current = "";
+            try { await client.leave(); } catch { /* A conexão já pode estar fechada. */ }
+            setState("duplicate");
+            onJoinedChange?.(false);
+          });
+        }, Math.max(10_000, (presence.expires_in - 20) * 1_000));
       }
       const stream = client.getMediaStream();
       streamRef.current = stream;
@@ -520,6 +541,11 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
         (credentials.participant_directory ?? []).map((entry) => [entry.identity, entry]),
       ));
       isHost.current = credentials.role === "host";
+      if (isHost.current) {
+        void refreshParticipantDirectory().catch((reason) => {
+          console.warn("Não foi possível carregar o diretório de participantes.", reason);
+        });
+      }
       const initialParticipants = client.getAllUser();
       setParticipants(initialParticipants);
       setState("joined");
