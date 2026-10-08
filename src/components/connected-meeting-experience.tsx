@@ -208,11 +208,10 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
           <button className="button meeting-copy-link" type="button" onClick={copyMeetingLink}>
             {copied ? <Check size={16} /> : <Copy size={16} />} {copied ? "Link copiado" : "Compartilhar"}
           </button>
-          {onExit ? <button className="button live-exit" type="button" onClick={onExit}><ChevronLeft size={16} /> Encerrar conversa</button> : <Link className="button live-exit" href={exitHref}><ChevronLeft size={16} /> Sair da sala</Link>}
+          {onExit ? <button className="button live-exit" type="button" onClick={onExit}><ChevronLeft size={16} /> Encerrar conversa</button> : <Link className="button live-exit" href={exitHref}><ChevronLeft size={16} /> Voltar para a página principal</Link>}
         </div>
       </header>
       <div className={`live-layout${interactionHidden ? " meeting-panel-hidden" : ""}`}>
-        {inRoom && <button className="meeting-panel-toggle" type="button" aria-label={interactionHidden ? "Mostrar chat e transcrição" : "Ocultar chat e transcrição"} aria-expanded={!interactionHidden} onClick={() => setInteractionHidden((current) => !current)}>{interactionHidden ? <PanelRightOpen size={17} /> : <PanelRightClose size={17} />}</button>}
         <section className="video-column" aria-label="Reunião ao vivo">
           <div className="video-player">
             {accessGranted && room.zoom_session
@@ -223,6 +222,7 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
           {realtimeNotice && <p className="live-error" role="status">{realtimeNotice}</p>}
         </section>
         <aside className={`interaction-panel meeting-interaction-panel${inRoom ? "" : " meeting-interaction-locked"}`}>
+          {inRoom && <button className="meeting-panel-toggle" type="button" aria-label={interactionHidden ? "Mostrar chat e transcrição" : "Ocultar chat e transcrição"} aria-expanded={!interactionHidden} onClick={() => setInteractionHidden((current) => !current)}>{interactionHidden ? <PanelRightOpen size={17} /> : <PanelRightClose size={17} />}</button>}
           {!inRoom ? <div className="meeting-access-locked">
             <span><LockKeyhole size={22} /></span>
             <strong>Chat e transcrição da reunião</strong>
