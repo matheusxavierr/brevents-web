@@ -37,7 +37,7 @@ export function CreateEventForm() {
           timezone: "America/Sao_Paulo",
           access_mode: data.access_mode,
           public_config: { subtitle: data.subtitle, location: "Online" },
-          branding: { primary_color: "#a65c45", accent_color: "#7a8c74" },
+          branding: { primary_color: "#135BCA", accent_color: "#24824F" },
           feature_flags: { chat: true, questions: true, polls: true, recordings: true },
         },
       });

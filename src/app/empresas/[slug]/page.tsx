@@ -8,14 +8,14 @@ export default async function CompanyHubPage({ params }: { params: Promise<{ slu
   const { slug } = await params;
   const organization = await getPublicOrganization(slug);
   if (!organization) notFound();
-  const primary = organization.branding?.primary_color ?? "#A65C45";
-  const accent = organization.branding?.accent_color ?? "#7A8C74";
+  const primary = organization.branding?.primary_color ?? "#135BCA";
+  const accent = organization.branding?.accent_color ?? "#24824F";
   const events = organization.events ?? [];
   const links = Object.entries(organization.social_links ?? {}).filter((entry): entry is [string, string] => Boolean(entry[1]));
 
   return <><HomeHeader /><main className="company-public-hub" style={{ "--hub-primary": primary, "--hub-accent": accent } as React.CSSProperties}>
     <nav className="company-hub-section-nav" aria-label="Seções da empresa"><a href="#sobre">Sobre</a><a href="#eventos">Eventos</a><a href="#contato">Contato</a></nav>
-    <section className="company-hub-hero" style={organization.cover_image_url ? { backgroundImage: `linear-gradient(90deg, rgba(21,22,24,.92), rgba(21,22,24,.55)), url(${organization.cover_image_url})` } : undefined}>
+    <section className="company-hub-hero" style={organization.cover_image_url ? { backgroundImage: `linear-gradient(90deg, rgba(0,44,112,.92), rgba(0,44,112,.55)), url(${organization.cover_image_url})` } : undefined}>
       <div className="company-hub-identity">{organization.logo_url ? <span className="company-hub-logo" style={{ backgroundImage: `url(${organization.logo_url})` }} /> : <span className="company-hub-logo fallback">{organization.name.slice(0, 2).toUpperCase()}</span>}<p className="eyebrow">Hub oficial no BR Events</p><h1>{organization.headline || organization.name}</h1><p>{organization.description}</p></div>
     </section>
     <section className="company-hub-about" id="sobre"><div><p className="eyebrow">A empresa</p><h2>{organization.name}</h2></div><p>{organization.description || "Conheça a empresa e acompanhe seus próximos eventos no BR Events."}</p></section>

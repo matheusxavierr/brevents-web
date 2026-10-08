@@ -1,9 +1,4 @@
 import type { Metadata } from "next";
-import "@fontsource-variable/baloo-2";
-import "@fontsource/archivo/400.css";
-import "@fontsource/archivo/600.css";
-import "@fontsource/ibm-plex-mono/400.css";
-import "@fontsource/ibm-plex-mono/500.css";
 import "./globals.css";
 import { NavigationFeedback } from "@/components/navigation-feedback";
 
@@ -19,6 +14,12 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="pt-BR" data-scroll-behavior="smooth">
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Zalando+Sans+Expanded:wght@500;700;800&display=swap" />
+      </head>
       <body><NavigationFeedback />{children}</body>
     </html>
   );

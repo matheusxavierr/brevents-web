@@ -7,7 +7,7 @@ import { Building2, ExternalLink, ImageIcon, LoaderCircle, Plus, Save, Share2 } 
 import { apiClient } from "@/lib/api-client";
 import type { Organization, Paginated } from "@/lib/api-types";
 
-const EMPTY_BRANDING = { primary_color: "#A65C45", accent_color: "#7A8C74" };
+const EMPTY_BRANDING = { primary_color: "#135BCA", accent_color: "#24824F" };
 
 export function CompanyHubAdmin() {
   const [organizations, setOrganizations] = useState<Organization[]>([]);

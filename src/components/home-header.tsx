@@ -1,6 +1,6 @@
 "use client";
 
-import { LogOut, Mail, ShieldCheck, UserRound, X } from "lucide-react";
+import { LogOut, Mail, Menu, ShieldCheck, UserRound, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -14,6 +14,7 @@ export function HomeHeader() {
   const [user, setUser] = useState<User | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false); // visual only: mobile hamburger
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -50,9 +51,12 @@ export function HomeHeader() {
   }
 
   return (
-    <header className="home-header">
+    <header className={menuOpen ? "home-header menu-open" : "home-header"}>
       <div className="home-header-inner">
         <Brand href="/" />
+        <button className="home-menu-toggle" type="button" onClick={() => setMenuOpen((v) => !v)} aria-expanded={menuOpen} aria-label={menuOpen ? "Fechar menu" : "Abrir menu"}>
+          {menuOpen ? <X size={22} /> : <Menu size={22} />}
+        </button>
         <nav className="home-product-switcher" aria-label="Soluções">
           <Link className={pathname === "/" || pathname === "/servicos/web-events" ? "active" : undefined} href="/servicos/web-events">
             Web Events
