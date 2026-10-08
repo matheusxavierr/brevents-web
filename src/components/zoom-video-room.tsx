@@ -323,9 +323,10 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
       name.textContent = participant.displayName;
       status.textContent = participant.muted ? "Microfone desligado" : "Microfone ligado";
     });
-    nextParticipants.forEach((participant) => {
-      const tile = videoPlayers.current.get(participant.userId) ?? videoPlaceholders.current.get(participant.userId);
-      if (tile) sdkContainer.appendChild(tile);
+    const orderedTiles = nextParticipants.map((participant) => videoPlayers.current.get(participant.userId) ?? videoPlaceholders.current.get(participant.userId)).filter((tile): tile is HTMLElement => Boolean(tile));
+    orderedTiles.forEach((tile, index) => {
+      const currentTile = sdkContainer.children.item(index);
+      if (currentTile !== tile) sdkContainer.insertBefore(tile, currentTile);
     });
   }
 
@@ -650,7 +651,11 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
 
       client.on("user-added", scheduleParticipantRefresh);
       client.on("user-removed", scheduleParticipantRefresh);
-      client.on("user-updated", scheduleParticipantRefresh);
+      client.on("user-updated", () => {
+        void refreshParticipants().catch((refreshError) => {
+          console.error("Não foi possível atualizar o estado dos participantes.", refreshError);
+        });
+      });
       client.on("command-channel-message", async (payload) => {
         try {
           const command = JSON.parse(payload.text) as {

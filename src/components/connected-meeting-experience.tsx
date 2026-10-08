@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronLeft, Copy, FileText, LockKeyhole, MessageSquare, Send } from "lucide-react";
+import { Check, ChevronLeft, Copy, FileText, LockKeyhole, MessageSquare, PanelRightClose, PanelRightOpen, Send } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState } from "react";
@@ -9,6 +9,7 @@ import { ApiError, apiClient } from "@/lib/api-client";
 import type { ChatChannel, ChatMessage, EventData, LiveCaption, Paginated, Room, User } from "@/lib/api-types";
 import { isFatalRealtimeClose, realtimeReconnectDelay, websocketBaseUrl } from "@/lib/realtime";
 import { formatChatTime } from "@/lib/format-date";
+import { normalizeRealtimeChatMessage } from "@/lib/chat";
 import { Brand } from "./brand";
 import { ZoomVideoRoom } from "./zoom-video-room";
 
@@ -30,6 +31,7 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
   const [connected, setConnected] = useState(false);
   const [inRoom, setInRoom] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [interactionHidden, setInteractionHidden] = useState(false);
   const socket = useRef<WebSocket | null>(null);
   const requestId = useRef(1);
 
@@ -128,7 +130,7 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
         ws.onmessage = (incoming) => {
           const [type, , payload] = JSON.parse(incoming.data) as [string, number | null, Record<string, unknown>];
           if (type === "chat.event" || type === "chat.send.success") {
-            const nextMessage = payload as unknown as ChatMessage;
+            const nextMessage = normalizeRealtimeChatMessage(payload);
             setMessages((current) => current.some((item) => item.id === nextMessage.id) ? current : [...current, nextMessage]);
           }
         };
@@ -209,7 +211,8 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
           {onExit ? <button className="button live-exit" type="button" onClick={onExit}><ChevronLeft size={16} /> Encerrar conversa</button> : <Link className="button live-exit" href={exitHref}><ChevronLeft size={16} /> Sair da sala</Link>}
         </div>
       </header>
-      <div className="live-layout">
+      <div className={`live-layout${interactionHidden ? " meeting-panel-hidden" : ""}`}>
+        {inRoom && <button className="meeting-panel-toggle" type="button" aria-label={interactionHidden ? "Mostrar chat e transcrição" : "Ocultar chat e transcrição"} aria-expanded={!interactionHidden} onClick={() => setInteractionHidden((current) => !current)}>{interactionHidden ? <PanelRightOpen size={17} /> : <PanelRightClose size={17} />}</button>}
         <section className="video-column" aria-label="Reunião ao vivo">
           <div className="video-player">
             {accessGranted && room.zoom_session

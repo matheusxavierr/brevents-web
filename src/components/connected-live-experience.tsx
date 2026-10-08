@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, Send, ThumbsUp } from "lucide-react";
 import { Brand } from "./brand";
 import { formatChatTime } from "@/lib/format-date";
+import { normalizeRealtimeChatMessage } from "@/lib/chat";
 import { EventUnavailable } from "./event-unavailable";
 import { ZoomVideoRoom } from "./zoom-video-room";
 import { apiClient } from "@/lib/api-client";
@@ -99,7 +100,7 @@ export function ConnectedLiveExperience({ event }: { event: EventData }) {
         ws.onmessage = (incoming) => {
           const [type, , payload] = JSON.parse(incoming.data) as [string, number | null, Record<string, unknown>];
           if (type === "chat.event" || type === "chat.send.success") {
-            const nextMessage = payload as unknown as ChatMessage;
+            const nextMessage = normalizeRealtimeChatMessage(payload);
             setMessages((current) => current.some((item) => item.id === nextMessage.id) ? current : [...current, nextMessage]);
           }
           if (type === "question.created" || type === "question.updated") {

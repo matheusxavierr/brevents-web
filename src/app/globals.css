@@ -674,7 +674,14 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .zoom-prejoin .media-toggle-row button { min-height: 42px; }
 
 .meeting-live-page { height: 100svh; min-height: 0; overflow: hidden; }
-.meeting-live-page .live-layout { height: calc(100svh - 68px); }
+.meeting-live-page .live-layout { position: relative; height: calc(100svh - 68px); transition: grid-template-columns 320ms cubic-bezier(.22, 1, .36, 1); }
+.meeting-live-page .interaction-panel { transform: translateX(0); opacity: 1; transition: transform 280ms cubic-bezier(.22, 1, .36, 1), opacity 180ms ease, margin 280ms ease; }
+.meeting-live-page .meeting-panel-hidden { grid-template-columns: minmax(0, 1fr) 0; }
+.meeting-live-page .meeting-panel-hidden .interaction-panel { margin-right: 0; transform: translateX(105%); opacity: 0; pointer-events: none; }
+.meeting-panel-toggle { position: absolute; z-index: 25; top: 14px; right: 390px; display: grid; width: 32px; height: 32px; place-items: center; border: 1px solid rgb(255 255 255 / 16%); border-radius: 50%; background: rgb(0 32 87 / 78%); color: rgb(255 255 255 / 78%); cursor: pointer; backdrop-filter: blur(8px); transition: right 320ms cubic-bezier(.22, 1, .36, 1), background 160ms ease, color 160ms ease, transform 160ms ease; }
+.meeting-panel-toggle:hover, .meeting-panel-toggle:focus-visible { background: #135ecf; color: white; }
+.meeting-panel-toggle:active { transform: scale(.94); }
+.meeting-panel-hidden .meeting-panel-toggle { right: 14px; }
 .meeting-bootstrap { display: grid; min-height: 100svh; place-content: center; justify-items: center; gap: 16px; background: var(--ink); color: white; padding: 30px; text-align: center; }
 .meeting-bootstrap .brand { margin-bottom: 18px; color: white; }
 .meeting-bootstrap h1, .meeting-bootstrap p { margin: 0; }
@@ -719,6 +726,9 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .meeting-create-layout { grid-template-columns: 1fr; }
   .meeting-create-preview { min-height: 560px; }
   .media-device-setup { grid-template-columns: 1fr; }
+  .meeting-live-page .meeting-panel-hidden { grid-template-columns: 1fr; }
+  .meeting-live-page .meeting-panel-hidden .interaction-panel { min-height: 0; max-height: 0; margin: 0 10px; }
+  .meeting-panel-toggle, .meeting-panel-hidden .meeting-panel-toggle { right: 14px; }
 }
 
 @media (max-width: 640px) {
