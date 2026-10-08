@@ -204,7 +204,10 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
   useEffect(() => {
     let thumbnailIndex = 0;
     videoPlayers.current.forEach((player, userId) => {
-      player.dataset.focused = String(focus === `video:${userId}`);
+      const isFocused = focus === `video:${userId}`;
+      player.dataset.focused = String(isFocused);
+      player.setAttribute("aria-pressed", String(isFocused));
+      player.setAttribute("aria-label", isFocused ? "Voltar ao grid de participantes" : "Colocar este vídeo em destaque");
       player.style.setProperty("--thumbnail-offset", `${thumbnailIndex * 150}px`);
       thumbnailIndex += 1;
     });
@@ -374,8 +377,8 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
     const toggleFocus = () => setFocus((current) => current === `video:${userId}` ? "grid" : `video:${userId}`);
     player.tabIndex = 0;
     player.setAttribute("role", "button");
+    player.setAttribute("aria-pressed", "false");
     player.setAttribute("aria-label", "Colocar este vídeo em destaque");
-    player.setAttribute("aria-label", "Alternar destaque deste vídeo");
     player.addEventListener("click", toggleFocus);
     player.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") {
@@ -383,6 +386,11 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
         toggleFocus();
       }
     });
+  }
+
+  function toggleShareFocus() {
+    setShareMaximized(false);
+    setFocus((current) => current === "share" ? "grid" : "share");
   }
 
   async function attachVideo(userId: number) {
@@ -1222,7 +1230,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
       </nav>}
       <div className={`zoom-media-stage ${hasActiveShare ? "has-share" : "no-share"} ${focusClass}${shareMaximized ? " share-maximized" : ""}`}>
         <div className="zoom-video-grid" ref={container} aria-label="Participantes com vídeo" />
-        <div className="zoom-share-surface" role="button" tabIndex={hasActiveShare ? 0 : -1} aria-hidden={!hasActiveShare} aria-label="Colocar compartilhamento de tela em destaque" onClick={() => setFocus("share")} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setFocus("share"); }}>
+        <div className="zoom-share-surface" role="button" tabIndex={hasActiveShare ? 0 : -1} aria-hidden={!hasActiveShare} aria-pressed={focus === "share"} aria-label={focus === "share" ? "Voltar ao grid de participantes" : "Colocar compartilhamento de tela em destaque"} onClick={toggleShareFocus} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggleShareFocus(); } }}>
           <div className="zoom-remote-share" ref={shareContainer} />
           <canvas className={remoteShareFallback ? "zoom-remote-share-canvas active" : "zoom-remote-share-canvas"} ref={remoteShareCanvas} aria-label="Tela compartilhada" />
           <video className={sharing && sharePreviewKind === "video" ? "zoom-local-share active" : "zoom-local-share"} ref={sharePreviewVideo} muted playsInline aria-label="Prévia da sua tela compartilhada" />
