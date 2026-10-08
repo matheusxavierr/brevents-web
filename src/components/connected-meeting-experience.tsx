@@ -12,12 +12,14 @@ import { formatChatTime } from "@/lib/format-date";
 import { normalizeRealtimeChatMessage } from "@/lib/chat";
 import { Brand } from "./brand";
 import { ZoomVideoRoom } from "./zoom-video-room";
+import { useSession } from "./session-provider";
 
 type MeetingTab = "chat" | "transcript";
 type JoinResponse = { token: string };
 
 export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/", onExit }: { event: EventData; roomOverride?: Room; exitHref?: string; onExit?: () => void }) {
   const router = useRouter();
+  const { user: sessionUser } = useSession();
   const room = roomOverride ?? event.rooms?.find((item) => item.mode === "meeting" && item.zoom_session) ?? event.rooms?.[0];
   const [user, setUser] = useState<User | null>(null);
   const [accessGranted, setAccessGranted] = useState(false);
@@ -66,15 +68,13 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
 
     async function load() {
       try {
-        const response = await fetch("/api/auth/me");
-        if (!response.ok) {
+        if (!sessionUser) {
           router.replace(`/entrar?next=${encodeURIComponent(window.location.pathname)}`);
           return;
         }
-        const activeUser = await response.json() as User;
         if (cancelled) return;
-        setUser(activeUser);
-        await ensureMeetingAccess(activeUser);
+        setUser(sessionUser);
+        await ensureMeetingAccess(sessionUser);
         if (cancelled) return;
         setAccessGranted(true);
       } catch (reason) {
@@ -88,7 +88,7 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
       cancelled = true;
       socket.current?.close();
     };
-  }, [event.id, room, router]);
+  }, [event.id, room, router, sessionUser]);
 
   useEffect(() => {
     if (!room || !inRoom) return;

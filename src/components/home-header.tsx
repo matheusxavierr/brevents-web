@@ -5,35 +5,15 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import type { User } from "@/lib/api-types";
 import { Brand } from "./brand";
+import { useSession } from "./session-provider";
 
 export function HomeHeader() {
   const router = useRouter();
   const pathname = usePathname();
-  const [user, setUser] = useState<User | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  const { user, setUser } = useSession();
   const [profileOpen, setProfileOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false); // visual only: mobile hamburger
-
-  useEffect(() => {
-    fetch("/api/auth/me")
-      .then(async (response) => {
-        if (response.ok) setUser(await response.json());
-        setLoaded(true);
-      })
-      .catch(() => setLoaded(true));
-  }, []);
-
-  useEffect(() => {
-    const handleSessionExpired = () => {
-      setUser(null);
-      setProfileOpen(false);
-      setLoaded(true);
-    };
-    window.addEventListener("brevents:session-expired", handleSessionExpired);
-    return () => window.removeEventListener("brevents:session-expired", handleSessionExpired);
-  }, []);
 
   useEffect(() => {
     if (!profileOpen) return;
@@ -64,14 +44,14 @@ export function HomeHeader() {
           <Link className={pathname === "/servicos/meetings" ? "active" : undefined} href="/servicos/meetings">
             Meetings
           </Link>
-          {loaded && user && (
+          {user && (
             <Link className={pathname === "/hub" ? "active" : undefined} href="/hub">
               Hub da empresa
             </Link>
           )}
         </nav>
         <nav className="home-account-nav" aria-label="Conta">
-          {loaded && user ? (
+          {user ? (
             <>
               <button className="home-user" type="button" onClick={() => setProfileOpen(true)} aria-haspopup="dialog">
                 <span className="avatar">{user.first_name?.slice(0, 1) || "U"}</span>
@@ -83,13 +63,11 @@ export function HomeHeader() {
                 <LogOut size={17} />
               </button>
             </>
-          ) : loaded ? (
+          ) : (
             <>
               <Link className="home-signin" href="/entrar">Entrar</Link>
               <Link className="button button-primary" href="/criar-conta">Criar conta</Link>
             </>
-          ) : (
-            <span className="home-account-loading" aria-hidden="true" />
           )}
         </nav>
       </div>

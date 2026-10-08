@@ -13,11 +13,11 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useState } from "react";
 
 import { apiClient } from "@/lib/api-client";
-import type { User } from "@/lib/api-types";
 import { HomeHeader } from "./home-header";
+import { useSession } from "./session-provider";
 
 const eventFeatures = [
   { icon: CircleDot, title: "Inscrição pública sem conta", description: "Qualquer pessoa entra com link, sem criar login." },
@@ -34,22 +34,7 @@ const meetingFeatures = [
 ];
 
 export function ServiceLanding({ kind }: { kind: "event" | "meeting" }) {
-  const [user, setUser] = useState<User | null>(null);
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    fetch("/api/auth/me", { signal: controller.signal })
-      .then(async (response) => {
-        if (response.ok) setUser(await response.json());
-      })
-      .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === "AbortError") return;
-        console.error("Não foi possível carregar a conta na página do serviço.", error);
-      });
-
-    return () => controller.abort();
-  }, []);
+  const { user } = useSession();
 
   const isEvent = kind === "event";
   const features = isEvent ? eventFeatures : meetingFeatures;

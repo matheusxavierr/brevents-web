@@ -6,11 +6,13 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { apiClient } from "@/lib/api-client";
-import type { EventData, User } from "@/lib/api-types";
+import type { EventData } from "@/lib/api-types";
 import { Brand } from "./brand";
+import { useSession } from "./session-provider";
 
 export function CreateMeetingFlow() {
   const router = useRouter();
+  const { user } = useSession();
   const started = useRef(false);
   const [error, setError] = useState("");
 
@@ -20,12 +22,10 @@ export function CreateMeetingFlow() {
 
     async function createMeeting() {
       try {
-        const response = await fetch("/api/auth/me");
-        if (!response.ok) {
+        if (!user) {
           router.replace(`/entrar?next=${encodeURIComponent("/meetings/novo")}`);
           return;
         }
-        const user = await response.json() as User;
         const ownerName = user.first_name || user.name || user.username;
         const name = `Reunião de ${ownerName}`;
         const slug = `${slugify(name) || "reuniao"}-${Date.now().toString(36)}`;
@@ -38,7 +38,7 @@ export function CreateMeetingFlow() {
     }
 
     void createMeeting();
-  }, [router]);
+  }, [router, user]);
 
   return <main className="meeting-bootstrap">
     <Brand href="/" />

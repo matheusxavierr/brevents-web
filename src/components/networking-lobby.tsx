@@ -7,9 +7,11 @@ import { ArrowLeft, Check, Clock3, Handshake, LoaderCircle, MessageSquare, Searc
 import { apiClient } from "@/lib/api-client";
 import type { EventData, NetworkingPresence, NetworkingRequest, Paginated } from "@/lib/api-types";
 import { HomeHeader } from "./home-header";
+import { useSession } from "./session-provider";
 
 export function NetworkingLobby({ event }: { event: EventData }) {
   const router = useRouter();
+  const { user } = useSession();
   const [people, setPeople] = useState<NetworkingPresence[]>([]);
   const [requests, setRequests] = useState<NetworkingRequest[]>([]);
   const [ownRegistrationId, setOwnRegistrationId] = useState("");
@@ -35,9 +37,7 @@ export function NetworkingLobby({ event }: { event: EventData }) {
     let active = true;
     async function start() {
       try {
-        const response = await fetch("/api/auth/me");
-        if (!response.ok) { router.replace(`/entrar?next=${encodeURIComponent(window.location.pathname)}`); return; }
-        await response.json();
+        if (!user) { router.replace(`/entrar?next=${encodeURIComponent(window.location.pathname)}`); return; }
         if (!active) return;
         await refresh();
       } catch (reason) {
@@ -47,7 +47,7 @@ export function NetworkingLobby({ event }: { event: EventData }) {
     void start();
     const interval = window.setInterval(() => void refresh().catch(() => undefined), 5000);
     return () => { active = false; window.clearInterval(interval); void apiClient("networking-presences/leave/", { method: "POST", body: { event: event.id } }).catch(() => undefined); };
-  }, [event.id, refresh, router]);
+  }, [event.id, refresh, router, user]);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();

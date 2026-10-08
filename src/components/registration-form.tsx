@@ -1,18 +1,17 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, LoaderCircle } from "lucide-react";
 import { apiClient, readError } from "@/lib/api-client";
 import type { Registration, User } from "@/lib/api-types";
+import { useSession } from "./session-provider";
 
 export function RegistrationForm({ eventId, eventSlug, accessMode }: { eventId: string; eventSlug: string; accessMode: "public" | "registration" | "invite" }) {
-  const [user, setUser] = useState<User | null>(null);
+  const { user, setUser } = useSession();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [registration, setRegistration] = useState<Registration | null>(null);
-
-  useEffect(() => { fetch("/api/auth/me").then(async (response) => response.ok && setUser(await response.json())).catch(() => undefined); }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setLoading(true); setError("");

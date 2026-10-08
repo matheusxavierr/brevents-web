@@ -9,6 +9,7 @@ import { formatChatTime } from "@/lib/format-date";
 import { normalizeRealtimeChatMessage } from "@/lib/chat";
 import { EventUnavailable } from "./event-unavailable";
 import { ZoomVideoRoom } from "./zoom-video-room";
+import { useSession } from "./session-provider";
 import { apiClient } from "@/lib/api-client";
 import type { ChatChannel, ChatMessage, EventData, Paginated, Poll, Question, User } from "@/lib/api-types";
 
@@ -17,6 +18,7 @@ type JoinResponse = { token: string };
 
 export function ConnectedLiveExperience({ event }: { event: EventData }) {
   const router = useRouter();
+  const { user: sessionUser } = useSession();
   const publicRoom = event.rooms?.find((item) => item.zoom_session) ?? event.rooms?.[0];
   const [room, setRoom] = useState(publicRoom);
   const session = event.sessions?.find((item) => item.room === room?.id) ?? event.sessions?.[0];
@@ -61,16 +63,14 @@ export function ConnectedLiveExperience({ event }: { event: EventData }) {
     let cancelled = false;
     async function load() {
       try {
-        const meResponse = await fetch("/api/auth/me");
-        if (!meResponse.ok) {
+        if (!sessionUser) {
           if (event.access_mode !== "public") { router.push(`/entrar?next=${encodeURIComponent(window.location.pathname)}`); return; }
           setGuest(true);
           setAccessGranted(true);
           return;
         }
-        const activeUser = await meResponse.json() as User;
         if (cancelled) return;
-        setUser(activeUser);
+        setUser(sessionUser);
         const join = await apiClient<JoinResponse>(`events/${event.id}/join-token/`, { method: "POST" });
         setAccessGranted(true);
         const roomData = await apiClient<Paginated<NonNullable<typeof publicRoom>>>(`rooms/?event=${event.id}`);
@@ -121,7 +121,7 @@ export function ConnectedLiveExperience({ event }: { event: EventData }) {
     }
     load();
     return () => { cancelled = true; socket.current?.close(); };
-  }, [event.access_mode, event.id, publicRoom, router]);
+  }, [event.access_mode, event.id, publicRoom, router, sessionUser]);
 
   function sendMessage(formEvent: FormEvent) {
     formEvent.preventDefault();

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Activity, ArrowRight, BarChart3, CalendarRange, Check as CheckIcon, CheckCircle2, CircleStop, CircleUserRound, Cog, Film, LayoutDashboard, LogOut, MessageSquareText, Plus, Radio, RotateCcw, Settings, Users, Video } from "lucide-react";
 import { Brand } from "./brand";
+import { useSession } from "./session-provider";
 import { apiClient } from "@/lib/api-client";
 import type { Analytics, EventData, Paginated, Poll, Question, Recording, Registration, Room, Session, Speaker, User } from "@/lib/api-types";
 
@@ -27,6 +28,7 @@ const navGroups: Array<{ label: string; items: Tab[] }> = [
 
 export function OrganizerDashboard({ initialEventId, initialTab = "overview" }: { initialEventId?: string; initialTab?: Tab }) {
   const router = useRouter();
+  const { user: sessionUser } = useSession();
   const [user, setUser] = useState<User | null>(null); const [events, setEvents] = useState<EventData[]>([]);
   const [activeId, setActiveId] = useState(initialEventId ?? ""); const [tab, setTab] = useState<Tab>(initialTab);
   const [rooms, setRooms] = useState<Room[]>([]); const [speakers, setSpeakers] = useState<Speaker[]>([]); const [sessions, setSessions] = useState<Session[]>([]);
@@ -51,10 +53,9 @@ export function OrganizerDashboard({ initialEventId, initialTab = "overview" }: 
   useEffect(() => {
     async function load() {
       try {
-        const me = await fetch("/api/auth/me"); if (!me.ok) { router.push("/entrar?next=/painel"); return; }
-        const activeUser = await me.json() as User;
-        if (activeUser.account_type !== "organizer" && !activeUser.is_staff) { router.push("/"); return; }
-        setUser(activeUser);
+        if (!sessionUser) { router.push("/entrar?next=/painel"); return; }
+        if (sessionUser.account_type !== "organizer" && !sessionUser.is_staff) { router.push("/"); return; }
+        setUser(sessionUser);
         const eventData = await apiClient<Paginated<EventData>>("events/?managed=true"); const webEvents = eventData.results.filter(isWebEvent); setEvents(webEvents);
         const selected = initialEventId && webEvents.some((item) => item.id === initialEventId) ? initialEventId : webEvents[0]?.id;
         if (selected) { setActiveId(selected); await loadResources(selected); }
@@ -62,7 +63,7 @@ export function OrganizerDashboard({ initialEventId, initialTab = "overview" }: 
       finally { setLoading(false); }
     }
     load();
-  }, [initialEventId, loadResources, router]);
+  }, [initialEventId, loadResources, router, sessionUser]);
 
   async function reload(message?: string) { if (!activeId) return; await loadResources(activeId); if (message) { setNotice(message); window.setTimeout(() => setNotice(""), 3500); } }
   async function logout() { await fetch("/api/auth/logout", { method: "POST" }); router.push("/entrar"); router.refresh(); }

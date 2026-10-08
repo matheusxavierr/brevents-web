@@ -3,42 +3,21 @@
 import { Building2, LoaderCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 import { CompanyHubAdmin } from "./company-hub-admin";
 import { HomeHeader } from "./home-header";
+import { useSession } from "./session-provider";
 
 export function CompanyHubWorkspace() {
   const router = useRouter();
-  const [authorized, setAuthorized] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const { user } = useSession();
 
   useEffect(() => {
-    const controller = new AbortController();
+    if (!user) router.replace(`/entrar?next=${encodeURIComponent("/hub")}`);
+  }, [router, user]);
 
-    async function authorize() {
-      try {
-        const response = await fetch("/api/auth/me", { signal: controller.signal });
-        if (!response.ok) {
-          router.replace(`/entrar?next=${encodeURIComponent("/hub")}`);
-          return;
-        }
-
-        setAuthorized(true);
-      } catch (error: unknown) {
-        if (error instanceof DOMException && error.name === "AbortError") return;
-        console.error("Não foi possível validar o acesso ao hub da empresa.", error);
-        router.replace("/");
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    void authorize();
-    return () => controller.abort();
-  }, [router]);
-
-  if (loading || !authorized) {
+  if (!user) {
     return (
       <main className="hub-workspace-loading" aria-live="polite">
         <LoaderCircle className="spin" size={24} />

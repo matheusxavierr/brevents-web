@@ -6,6 +6,7 @@ import { CalendarRange, LogOut, Pencil, ShieldCheck, Trash2, Users, X } from "lu
 import { useRouter } from "next/navigation";
 import { Brand } from "./brand";
 import { AdminEventPanel } from "./admin-event-panel";
+import { useSession } from "./session-provider";
 import { apiClient } from "@/lib/api-client";
 import type { Paginated, User } from "@/lib/api-types";
 
@@ -19,6 +20,7 @@ type AdminEvent = {
 
 export function AdminConsole() {
   const router = useRouter();
+  const { user: sessionUser } = useSession();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [events, setEvents] = useState<AdminEvent[]>([]);
   const [tab, setTab] = useState<"users" | "events">("users");
@@ -29,17 +31,15 @@ export function AdminConsole() {
   const managedEvent = events.find((item) => item.id === managedEventId) ?? null;
 
   const load = useCallback(async () => {
-    const meResponse = await fetch("/api/auth/me");
-    if (!meResponse.ok) { router.push("/entrar?next=/admin"); return; }
-    const me = (await meResponse.json()) as User;
-    if (!me.is_superuser) { router.push("/"); return; }
+    if (!sessionUser) { router.push("/entrar?next=/admin"); return; }
+    if (!sessionUser.is_superuser) { router.push("/"); return; }
     const [userData, eventData] = await Promise.all([
       apiClient<Paginated<AdminUser>>("admin/users/"),
       apiClient<Paginated<AdminEvent>>("admin/events/"),
     ]);
     setUsers(userData.results);
     setEvents(eventData.results);
-  }, [router]);
+  }, [router, sessionUser]);
 
   useEffect(() => {
     let active = true;

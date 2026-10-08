@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CompanyHubAdmin } from "@/components/company-hub-admin";
 import { HomeHeader } from "@/components/home-header";
+import { SessionProvider } from "@/components/session-provider";
+import type { User } from "@/lib/api-types";
 
 const apiClientMock = vi.fn();
 
@@ -23,7 +25,7 @@ describe("conta e hub", () => {
   });
 
   it("abre os dados do usuário pelo header e oferece o hub para participante", async () => {
-    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({
+    const user: User = {
       id: 7,
       username: "ana@example.com",
       name: "Ana Lima",
@@ -33,10 +35,10 @@ describe("conta e hub", () => {
       is_staff: false,
       is_superuser: false,
       account_type: "attendee",
-    }), { status: 200 }));
+    };
 
-    render(<HomeHeader />);
-    const accountButton = await screen.findByRole("button", { name: /Ana Lima/i });
+    render(<SessionProvider initialUser={user}><HomeHeader /></SessionProvider>);
+    const accountButton = screen.getByRole("button", { name: /Ana Lima/i });
     expect(screen.getByRole("link", { name: "Hub da empresa" })).toBeInTheDocument();
     fireEvent.click(accountButton);
     expect(screen.getByRole("dialog", { name: "Ana Lima" })).toBeInTheDocument();
