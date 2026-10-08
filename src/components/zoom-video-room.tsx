@@ -319,7 +319,9 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
         const avatar = document.createElement("span");
         avatar.className = "zoom-participant-avatar";
         const name = document.createElement("strong");
-        const status = document.createElement("small");
+        const status = document.createElement("span");
+        status.className = "zoom-participant-audio-status";
+        status.appendChild(document.createElement("i"));
         placeholder.append(avatar, name, status);
         videoPlaceholders.current.set(participant.userId, placeholder);
         sdkContainer.appendChild(placeholder);
@@ -327,7 +329,9 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
       const [avatar, name, status] = Array.from(placeholder.children) as HTMLElement[];
       avatar.textContent = participant.displayName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "?";
       name.textContent = participant.displayName;
-      status.textContent = participant.muted ? "Microfone desligado" : "Microfone ligado";
+      status.dataset.muted = String(participant.muted);
+      status.setAttribute("aria-label", participant.muted ? "Microfone desligado" : "Microfone ligado");
+      status.title = participant.muted ? "Microfone desligado" : "Microfone ligado";
     });
     const orderedTiles = nextParticipants.map((participant) => videoPlayers.current.get(participant.userId) ?? videoPlaceholders.current.get(participant.userId)).filter((tile): tile is HTMLElement => Boolean(tile));
     orderedTiles.forEach((tile, index) => {
@@ -1206,9 +1210,10 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
   const participantPageCount = Math.max(1, Math.ceil(participants.length / participantPageSize));
   const safeParticipantPage = Math.min(participantPage, participantPageCount - 1);
   const audienceParticipants = participants.filter((participant) => !participant.isHost && !participant.isManager);
+  const directoryParticipants = role === "host" ? audienceParticipants : participants;
   const onStageParticipantCount = audienceParticipants.filter((participant) => stageMembers[participantIdentity(participant)]?.status === "accepted").length;
   const normalizedParticipantSearch = normalizeSearch(participantSearch);
-  const visibleParticipants = audienceParticipants.filter((participant) => {
+  const visibleParticipants = directoryParticipants.filter((participant) => {
     const identity = participantIdentity(participant);
     const directoryEntry = participantDirectory[identity];
     const matchesView = participantView === "all" || stageMembers[identity]?.status === "accepted";
@@ -1220,10 +1225,10 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
   return (
     <div className="zoom-meeting-shell">
       <div className="zoom-meeting-status">
-        <span className="live-dot" /> AO VIVO · {role === "host" ? "ORGANIZADOR" : onStage ? "NO PALCO" : role === "viewer" ? "ESPECTADOR" : "PLATEIA"}
+        <span className="live-dot" /> AO VIVO · {activeRoomMode === "meeting" ? role === "host" ? "ORGANIZADOR" : "PARTICIPANTE" : role === "host" ? "ORGANIZADOR" : onStage ? "NO PALCO" : role === "viewer" ? "ESPECTADOR" : "PLATEIA"}
         {role === "host"
           ? <div className="zoom-meeting-actions">{activeRoomMode === "meeting" ? <button type="button" className="zoom-event-settings" onClick={copyRoomLink}>{linkCopied ? <Check size={14} /> : <Copy size={14} />} {linkCopied ? "Link copiado" : "Compartilhar sala"}</button> : <a className="zoom-event-settings" href={`/painel?event=${encodeURIComponent(eventId)}&tab=settings`} target="_blank" rel="noopener noreferrer"><Settings size={14} /> Configurar evento</a>}<button ref={participantTrigger} type="button" className="zoom-participant-trigger" aria-expanded={participantPanelOpen} aria-controls="zoom-participant-directory" onClick={() => setParticipantPanelOpen((current) => !current)}><Users size={14} /> Participantes <strong>{audienceParticipants.length}</strong></button></div>
-          : activeRoomMode === "meeting" ? <div className="zoom-meeting-actions"><button type="button" className="zoom-event-settings" onClick={copyRoomLink}>{linkCopied ? <Check size={14} /> : <Copy size={14} />} {linkCopied ? "Link copiado" : "Compartilhar"}</button><span><Users size={14} /> {participants.length}</span></div> : <span><Users size={14} /> {participants.length}</span>}
+          : activeRoomMode === "meeting" ? <div className="zoom-meeting-actions"><button type="button" className="zoom-event-settings" onClick={copyRoomLink}>{linkCopied ? <Check size={14} /> : <Copy size={14} />} {linkCopied ? "Link copiado" : "Compartilhar"}</button><button ref={participantTrigger} type="button" className="zoom-participant-trigger" aria-expanded={participantPanelOpen} aria-controls="zoom-participant-directory" onClick={() => setParticipantPanelOpen((current) => !current)}><Users size={14} /> Participantes <strong>{participants.length}</strong></button></div> : <span><Users size={14} /> {participants.length}</span>}
       </div>
       {participantPageCount > 1 && !shareMaximized && <nav className="zoom-pagination" aria-label="PÃ¡ginas de participantes">
         <button type="button" aria-label="Participantes anteriores" disabled={safeParticipantPage === 0} onClick={() => setParticipantPage((current) => Math.max(0, current - 1))}><ChevronLeft size={16} /></button>
@@ -1247,9 +1252,9 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
         <strong>{liveCaption.speaker_name}</strong>
         <span dir="auto">{liveCaption.translations[captionLanguage]}</span>
       </div>}
-      {role === "host" && participantPanelOpen && <aside id="zoom-participant-directory" className="zoom-participant-panel" role="dialog" aria-modal="false" aria-label="Gerenciar participantes">
+      {(role === "host" || activeRoomMode === "meeting") && participantPanelOpen && <aside id="zoom-participant-directory" className="zoom-participant-panel" role="dialog" aria-modal="false" aria-label={role === "host" ? "Gerenciar participantes" : "Participantes da reunião"}>
         <header>
-          <div><strong>Participantes</strong><small>{audienceParticipants.length} conectados agora</small></div>
+          <div><strong>Participantes</strong><small>{directoryParticipants.length} conectados agora</small></div>
           <button type="button" className="zoom-panel-close" aria-label="Fechar participantes" onClick={() => { setParticipantPanelOpen(false); participantTrigger.current?.focus(); }}><X size={17} /></button>
         </header>
         <label className="zoom-participant-search">
@@ -1257,7 +1262,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
           <input ref={participantSearchInput} type="search" value={participantSearch} onChange={(event) => setParticipantSearch(event.target.value)} placeholder="Buscar por nome ou e-mail" aria-label="Buscar participante por nome ou e-mail" />
         </label>
         <div className="zoom-participant-filters" aria-label="Filtrar participantes">
-          <button type="button" className={participantView === "all" ? "active" : ""} onClick={() => setParticipantView("all")}>Todos <span>{audienceParticipants.length}</span></button>
+          <button type="button" className={participantView === "all" ? "active" : ""} onClick={() => setParticipantView("all")}>Todos <span>{directoryParticipants.length}</span></button>
           {activeRoomMode === "event" && <button type="button" className={participantView === "stage" ? "active" : ""} onClick={() => setParticipantView("stage")}>No palco <span>{onStageParticipantCount}</span></button>}
         </div>
         {moderationFeedback && <div className={`zoom-moderation-feedback${moderationFeedback.failed ? " failed" : ""}`} role="status" aria-live="polite">{moderationFeedback.message}</div>}
@@ -1271,7 +1276,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
             const canModerateMedia = activeRoomMode === "meeting" || stageMember?.status === "accepted";
             return <div className={`zoom-participant-row${stageMember?.status === "accepted" ? " on-stage" : ""}`} key={participant.userId}>
               <span><strong>{participant.displayName}</strong><small title={directoryEntry?.email}>{directoryEntry?.email || statusLabel}</small>{directoryEntry?.email && <em>{statusLabel}</em>}</span>
-              <div>
+              {role === "host" && <div>
                 {activeRoomMode === "event" && (stageMember?.status === "accepted"
                   ? <button type="button" className="remove-stage" onClick={() => removeFromStage(participant)} aria-label={`Tirar ${participant.displayName} do palco`} title="Tirar do palco"><UserMinus size={15} /></button>
                   : <button type="button" onClick={() => inviteToStage(participant)} disabled={stageMember?.status === "pending" || (!identity.startsWith("u:") && !identity.startsWith("g:"))} aria-label={`Convidar ${participant.displayName} ao palco`} title={stageMember?.status === "pending" ? "Convite enviado" : "Convidar ao palco"}><UserPlus size={15} /></button>)}
@@ -1279,7 +1284,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
                 <button type="button" className={moderationFeedback?.userId === participant.userId && moderationFeedback.control === "video" ? moderationFeedback.failed ? "control-failed" : "control-confirmed" : ""} onClick={() => controlParticipantVideo(participant)} disabled={!canModerateMedia} aria-label={participant.bVideoOn ? `Desligar câmera de ${participant.displayName}` : `Solicitar câmera de ${participant.displayName}`} title={participant.bVideoOn ? "Desligar câmera" : "Pedir para ligar câmera"}>{participant.bVideoOn ? <VideoOff size={15} /> : <Video size={15} />}</button>
                 <button type="button" className={moderationFeedback?.userId === participant.userId && moderationFeedback.control === "share" ? moderationFeedback.failed ? "control-failed" : "control-confirmed" : ""} onClick={() => controlParticipantShare(participant)} disabled={!canModerateMedia} aria-label={participant.sharerOn ? `Interromper compartilhamento de ${participant.displayName}` : `Solicitar compartilhamento de ${participant.displayName}`} title={participant.sharerOn ? "Interromper compartilhamento" : "Pedir compartilhamento de tela"}>{participant.sharerOn ? <MonitorX size={15} /> : <MonitorUp size={15} />}</button>
                 {activeRoomMode === "meeting" && <button type="button" className="remove-participant" onClick={() => removeParticipant(participant)} aria-label={`Remover ${participant.displayName} da reunião`} title="Remover participante"><UserX size={15} /></button>}
-              </div>
+              </div>}
             </div>;
           })}
           {visibleParticipants.length === 0 && <div className="zoom-participant-empty"><Search size={20} /><strong>Ninguém encontrado</strong><span>Tente outro nome ou e-mail.</span></div>}
