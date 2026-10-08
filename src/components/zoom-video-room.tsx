@@ -67,6 +67,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
   const videoPlayers = useRef(new Map<number, HTMLElement>());
   const videoPlaceholders = useRef(new Map<number, HTMLElement>());
   const videoAttachVersions = useRef(new Map<number, number>());
+  const forcedVideoOff = useRef(new Set<number>());
   const remoteSharePlayer = useRef<HTMLElement | null>(null);
   const remoteShareUsesCanvas = useRef(false);
   const activeShareUserIdRef = useRef<number | null>(null);
@@ -75,6 +76,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
   const presenceHeartbeatTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const presenceToken = useRef("");
   const participantDirectoryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const participantSyncTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const moderationFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const feedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const feedbackId = useRef(0);
@@ -284,6 +286,16 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
     if (!container.current) return;
     const sdkContainer = ensureSdkContainer(container.current, "zoom-video-sdk-container");
     const currentIds = new Set(nextParticipants.map((participant) => participant.userId));
+    forcedVideoOff.current.forEach((userId) => {
+      if (!currentIds.has(userId)) forcedVideoOff.current.delete(userId);
+    });
+    videoPlayers.current.forEach((player, userId) => {
+      const participant = nextParticipants.find((item) => item.userId === userId);
+      if (!currentIds.has(userId) || !participant?.bVideoOn) {
+        player.remove();
+        videoPlayers.current.delete(userId);
+      }
+    });
     videoPlaceholders.current.forEach((placeholder, userId) => {
       const participant = nextParticipants.find((item) => item.userId === userId);
       if (!currentIds.has(userId) || participant?.bVideoOn) {
@@ -311,11 +323,15 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
       name.textContent = participant.displayName;
       status.textContent = participant.muted ? "Microfone desligado" : "Microfone ligado";
     });
+    nextParticipants.forEach((participant) => {
+      const tile = videoPlayers.current.get(participant.userId) ?? videoPlaceholders.current.get(participant.userId);
+      if (tile) sdkContainer.appendChild(tile);
+    });
   }
 
   async function refreshParticipants() {
     if (clientRef.current) {
-      const nextParticipants = clientRef.current.getAllUser();
+      const nextParticipants = clientRef.current.getAllUser().map((participant) => forcedVideoOff.current.has(participant.userId) ? { ...participant, bVideoOn: false } : participant);
       setParticipants(nextParticipants);
       syncParticipantTiles(nextParticipants);
       await Promise.all(nextParticipants.filter((participant) => participant.bVideoOn && !videoPlayers.current.has(participant.userId)).map((participant) => attachVideo(participant.userId)));
@@ -327,6 +343,21 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
         console.error("Não foi possível atualizar o diretório de participantes.", directoryError);
       });
     }, 350);
+  }
+
+  function scheduleParticipantRefresh() {
+    participantSyncTimers.current.forEach((timer) => clearTimeout(timer));
+    participantSyncTimers.current = [];
+    void refreshParticipants().catch((refreshError) => {
+      console.error("Não foi possível atualizar os participantes da reunião.", refreshError);
+    });
+    for (const delay of [120, 420]) {
+      participantSyncTimers.current.push(setTimeout(() => {
+        void refreshParticipants().catch((refreshError) => {
+          console.error("Não foi possível sincronizar os participantes da reunião.", refreshError);
+        });
+      }, delay));
+    }
   }
 
   function ensureSdkContainer(mount: HTMLElement, className: string) {
@@ -352,6 +383,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
     const stream = streamRef.current;
     const zoom = zoomRef.current;
     if (!stream || !zoom || !container.current) return;
+    forcedVideoOff.current.delete(userId);
     const version = (videoAttachVersions.current.get(userId) ?? 0) + 1;
     videoAttachVersions.current.set(userId, version);
     const player = await stream.attachVideo(userId, zoom.VideoQuality.Video_360P);
@@ -367,15 +399,25 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
       videoPlayers.current.set(userId, player);
       makeVideoFocusable(player, userId);
       ensureSdkContainer(container.current, "zoom-video-sdk-container").appendChild(player);
+      if (clientRef.current) {
+        const nextParticipants = clientRef.current.getAllUser().map((participant) => participant.userId === userId ? { ...participant, bVideoOn: true } : participant);
+        setParticipants(nextParticipants);
+        syncParticipantTiles(nextParticipants);
+      }
     }
   }
 
   async function detachVideo(userId: number) {
+    forcedVideoOff.current.add(userId);
     videoAttachVersions.current.set(userId, (videoAttachVersions.current.get(userId) ?? 0) + 1);
     await streamRef.current?.detachVideo(userId);
     videoPlayers.current.get(userId)?.remove();
     videoPlayers.current.delete(userId);
-    if (clientRef.current) syncParticipantTiles(clientRef.current.getAllUser());
+    if (clientRef.current) {
+      const nextParticipants = clientRef.current.getAllUser().map((participant) => participant.userId === userId ? { ...participant, bVideoOn: false } : participant);
+      setParticipants(nextParticipants);
+      syncParticipantTiles(nextParticipants);
+    }
     setFocus((current) => current === `video:${userId}` ? activeShareUserIdRef.current ? "share" : "grid" : current);
   }
 
@@ -601,9 +643,9 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
         await stream.lockShare(!hasActiveStageSharer);
       }
 
-      client.on("user-added", () => { void refreshParticipants(); });
-      client.on("user-removed", () => { void refreshParticipants(); });
-      client.on("user-updated", () => { void refreshParticipants(); });
+      client.on("user-added", scheduleParticipantRefresh);
+      client.on("user-removed", scheduleParticipantRefresh);
+      client.on("user-updated", scheduleParticipantRefresh);
       client.on("command-channel-message", async (payload) => {
         try {
           const command = JSON.parse(payload.text) as {
@@ -637,7 +679,10 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
           }
           if (command.type === "stage.stop-video") {
             await stream.stopVideo();
+            mediaStateRef.current.videoOn = false;
             setVideoOn(false);
+            await detachVideo(client.getCurrentUserInfo().userId);
+            showMediaFeedback("O organizador desligou sua câmera", false);
           }
           if (command.type === "stage.muted" && command.control === "audio") {
             if (!stream.isAudioMuted()) await stream.muteAudio();
@@ -647,9 +692,11 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
           }
           if (command.type === "stage.stop-share") {
             await stream.stopShareScreen();
+            mediaStateRef.current.sharing = false;
             setSharing(false);
             setSharePreviewKind(null);
             setShareMaximized(false);
+            showMediaFeedback("O organizador interrompeu seu compartilhamento", false);
           }
           if (command.type === "stage.request-audio") setMediaRequest({ senderId, control: "audio" });
           if (command.type === "stage.request-video") setMediaRequest({ senderId, control: "video" });
@@ -683,7 +730,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
       client.on("peer-video-state-change", async ({ action, userId }) => {
         if (action === "Start") await attachVideo(userId);
         else await detachVideo(userId);
-        void refreshParticipants();
+        scheduleParticipantRefresh();
       });
       client.on("active-share-change", async ({ state: shareState, userId }) => {
         try {
@@ -879,6 +926,8 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
     heartbeatTimer.current = null;
     if (participantDirectoryTimer.current) clearTimeout(participantDirectoryTimer.current);
     participantDirectoryTimer.current = null;
+    participantSyncTimers.current.forEach((timer) => clearTimeout(timer));
+    participantSyncTimers.current = [];
     if (moderationFeedbackTimer.current) clearTimeout(moderationFeedbackTimer.current);
     moderationFeedbackTimer.current = null;
     if (captionTimer.current) clearTimeout(captionTimer.current);
@@ -895,6 +944,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
     videoPlayers.current.clear();
     videoPlaceholders.current.clear();
     videoAttachVersions.current.clear();
+    forcedVideoOff.current.clear();
     remoteSharePlayer.current = null;
     remoteShareUsesCanvas.current = false;
     activeShareUserIdRef.current = null;
@@ -1013,6 +1063,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
         participant.userId,
       );
       ensureZoomSuccess(result);
+      if (participant.bVideoOn) await detachVideo(participant.userId);
       showModerationFeedback(
         participant.userId,
         "video",
