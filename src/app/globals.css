@@ -477,7 +477,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .zoom-pagination button:disabled { cursor: not-allowed; opacity: .35; }
 .zoom-share-maximize { position: absolute; z-index: 20; right: 22px; bottom: 22px; background: rgb(0 32 87 / 86%); backdrop-filter: blur(8px); }
 .zoom-media-stage.share-focused .zoom-share-maximize { bottom: 118px; }
-.zoom-media-stage.share-maximized .zoom-share-surface { z-index: 8; inset: 0 !important; border-radius: 0; animation: zoom-share-maximize 280ms cubic-bezier(.2, .8, .2, 1); }
+.zoom-media-stage.share-maximized .zoom-share-surface { z-index: 8; inset: 0 !important; border-radius: 0; }
 .zoom-media-stage.share-maximized .zoom-video-grid { visibility: hidden; pointer-events: none; }
 .zoom-video-grid, .zoom-video-sdk-container { position: absolute; inset: 0; min-width: 0; min-height: 0; }
 .zoom-video-sdk-container { display: grid !important; width: 100%; height: 100%; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 10px; padding: 10px; }
@@ -487,7 +487,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .zoom-participant-placeholder strong { max-width: 100%; overflow: hidden; font-size: .82rem; text-overflow: ellipsis; white-space: nowrap; }
 .zoom-participant-placeholder small { color: rgb(255 255 255 / 48%); font-size: .64rem; }
 .zoom-video-sdk-container video-player:focus-visible, .zoom-share-surface:focus-visible { outline: 3px solid var(--signal); outline-offset: -3px; }
-.zoom-share-surface { position: absolute; z-index: 1; display: grid; place-items: center; overflow: hidden; visibility: hidden; border: 1px solid rgb(255 255 255 / 12%); background: #00173e; cursor: pointer; opacity: 0; transform: scale(.975); transition: inset 300ms cubic-bezier(.2, .8, .2, 1), width 300ms cubic-bezier(.2, .8, .2, 1), height 300ms cubic-bezier(.2, .8, .2, 1), border-radius 300ms ease, opacity 190ms ease, transform 300ms cubic-bezier(.2, .8, .2, 1), visibility 0s linear 220ms; }
+.zoom-share-surface { position: absolute; z-index: 1; display: grid; place-items: center; overflow: hidden; visibility: hidden; border: 1px solid rgb(255 255 255 / 12%); background: #00173e; cursor: pointer; opacity: 0; transform: scale(.975); transition: opacity 190ms ease, transform 220ms cubic-bezier(.2, .8, .2, 1), visibility 0s linear 220ms; }
 .zoom-media-stage.has-share .zoom-share-surface { visibility: visible; opacity: 1; transform: scale(1); transition-delay: 0s; }
 .zoom-remote-share, .zoom-share-sdk-container { width: 100%; height: 100%; min-width: 0; min-height: 0; }
 .zoom-share-surface > .zoom-remote-share,
@@ -512,7 +512,6 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .zoom-media-stage.video-focused .zoom-video-sdk-container video-player { position: absolute; z-index: 2; bottom: 12px; left: calc(12px + var(--thumbnail-offset, 0px)); width: 142px; height: 80px; border: 2px solid rgb(255 255 255 / 16%); border-radius: 12px; }
 .zoom-media-stage.video-focused .zoom-video-sdk-container video-player[data-focused="true"] { z-index: 1; inset: 0; width: 100%; height: 100%; border: 0; border-radius: 0; animation: zoom-camera-focus 300ms cubic-bezier(.2, .8, .2, 1); }
 .zoom-media-stage.grid-focused .zoom-video-sdk-container { animation: zoom-grid-return 280ms cubic-bezier(.2, .8, .2, 1); }
-.zoom-media-stage.share-focused .zoom-share-surface { animation: zoom-share-focus 300ms cubic-bezier(.2, .8, .2, 1); }
 .zoom-media-stage.has-share.video-focused .zoom-share-surface { z-index: 3; right: 12px; bottom: 12px; width: 160px; height: 90px; border-radius: 12px; }
 .zoom-media-stage.has-share.grid-focused .zoom-share-surface { z-index: 3; right: 12px; bottom: 12px; width: 180px; height: 102px; border-radius: 12px; box-shadow: 0 10px 28px rgb(0 0 0 / 32%); }
 .zoom-media-stage.no-share .zoom-share-surface { pointer-events: none; }
@@ -615,8 +614,6 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .zoom-device-effects > label > span { display: inline-flex; align-items: center; gap: 7px; }
 @keyframes zoom-media-enter { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: scale(1); } }
 @keyframes zoom-camera-focus { from { opacity: .72; transform: scale(.965); } to { opacity: 1; transform: scale(1); } }
-@keyframes zoom-share-focus { from { opacity: .76; transform: scale(.975); } to { opacity: 1; transform: scale(1); } }
-@keyframes zoom-share-maximize { from { opacity: .82; transform: scale(.985); } to { opacity: 1; transform: scale(1); } }
 @keyframes zoom-grid-return { from { opacity: .76; transform: scale(.985); } to { opacity: 1; transform: scale(1); } }
 @keyframes zoom-thumbnails-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes zoom-feedback { 0% { opacity: 0; transform: translate(-50%, 8px) scale(.96); } 14%, 78% { opacity: 1; transform: translate(-50%, 0) scale(1); } 100% { opacity: 0; transform: translate(-50%, -5px) scale(.98); } }
