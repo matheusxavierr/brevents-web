@@ -370,12 +370,17 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
   }
 
   function makeVideoFocusable(player: HTMLElement, userId: number) {
+    const toggleFocus = () => setFocus((current) => current === `video:${userId}` ? "grid" : `video:${userId}`);
     player.tabIndex = 0;
     player.setAttribute("role", "button");
     player.setAttribute("aria-label", "Colocar este vídeo em destaque");
-    player.addEventListener("click", () => setFocus(`video:${userId}`));
+    player.setAttribute("aria-label", "Alternar destaque deste vídeo");
+    player.addEventListener("click", toggleFocus);
     player.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") setFocus(`video:${userId}`);
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        toggleFocus();
+      }
     });
   }
 
