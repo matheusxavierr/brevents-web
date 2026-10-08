@@ -8,6 +8,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { ApiError, apiClient } from "@/lib/api-client";
 import type { ChatChannel, ChatMessage, EventData, LiveCaption, Paginated, Room, User } from "@/lib/api-types";
 import { isFatalRealtimeClose, realtimeReconnectDelay, websocketBaseUrl } from "@/lib/realtime";
+import { formatChatTime } from "@/lib/format-date";
 import { Brand } from "./brand";
 import { ZoomVideoRoom } from "./zoom-video-room";
 
@@ -230,10 +231,10 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
           </div>
           <div className="interaction-content">
             {tab === "chat" && (messages.length
-              ? messages.map((item) => <article className="message" key={item.id}><span className="avatar">{(item.sender?.first_name || item.sender?.name || item.sender?.username || "?").slice(0, 2).toUpperCase()}</span><div><strong>{item.sender ? item.sender.name || `${item.sender.first_name ?? ""} ${item.sender.last_name ?? ""}`.trim() || item.sender.username : "Participante"}</strong><time>{new Date(item.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</time><p>{item.body}</p></div></article>)
+              ? messages.map((item) => <article className="message" key={item.id}><span className="avatar">{(item.sender?.first_name || item.sender?.name || item.sender?.username || "?").slice(0, 2).toUpperCase()}</span><div><strong>{item.sender ? item.sender.name || `${item.sender.first_name ?? ""} ${item.sender.last_name ?? ""}`.trim() || item.sender.username : "Participante"}</strong><time>{formatChatTime(item.created_at)}</time><p>{item.body}</p></div></article>)
               : <div className="meeting-panel-empty"><MessageSquare size={24} /><strong>Conversa aberta</strong><span>As mensagens da reunião aparecerão aqui.</span></div>)}
             {tab === "transcript" && (captions.length
-              ? captions.map((caption) => <article className="meeting-transcript-entry" key={caption.id}><strong>{caption.speaker_name}</strong><time>{new Date(caption.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</time><p>{caption.original_text}</p></article>)
+              ? captions.map((caption) => <article className="meeting-transcript-entry" key={caption.id}><strong>{caption.speaker_name}</strong><time>{formatChatTime(caption.created_at)}</time><p>{caption.original_text}</p></article>)
               : <div className="meeting-panel-empty"><FileText size={24} /><strong>Transcrição ao vivo</strong><span>Ative as legendas na sala para registrar as falas.</span></div>)}
           </div>
           {tab === "chat" && <form className="composer" onSubmit={sendMessage}><label className="sr-only" htmlFor="meeting-chat-message">Mensagem</label><input id="meeting-chat-message" value={message} onChange={(event) => setMessage(event.target.value)} placeholder={user ? `Mensagem como ${user.first_name || user.username}` : "Escreva uma mensagem"} /><button className="icon-button" type="submit" aria-label="Enviar"><Send size={17} /></button></form>}

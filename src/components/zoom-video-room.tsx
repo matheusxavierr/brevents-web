@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ChevronUp, Copy, Mic, MicOff, MonitorUp, MonitorX, PhoneOff, Search, Settings, UserMinus, UserPlus, UserX, Users, Video, VideoOff, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronUp, Copy, Maximize2, Mic, MicOff, Minimize2, MonitorUp, MonitorX, PhoneOff, Search, Settings, UserMinus, UserPlus, UserX, Users, Video, VideoOff, X } from "lucide-react";
 import Link from "next/link";
 import { ApiError, apiClient } from "@/lib/api-client";
 import type { CaptionLanguage, LiveCaption, ParticipantDirectoryEntry, StageInvitation, ZoomJoinResponse, ZoomSession } from "@/lib/api-types";
@@ -17,6 +17,8 @@ type StageMember = Pick<StageInvitation, "status" | "allow_audio" | "allow_video
 type MediaControl = "audio" | "video" | "share";
 type MediaRequest = { senderId: number; control: MediaControl };
 type ZoomPresenceResponse = { token: string; expires_in: number };
+
+const PARTICIPANTS_PER_PAGE = 9;
 
 function participantIdentity(participant: ZoomParticipant) {
   return String(participant.userKey ?? participant.userIdentity ?? "");
@@ -90,6 +92,8 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
   const [sharing, setSharing] = useState(false);
   const [sharePreviewKind, setSharePreviewKind] = useState<"video" | "canvas" | null>(null);
   const [activeShareUserId, setActiveShareUserId] = useState<number | null>(null);
+  const [shareMaximized, setShareMaximized] = useState(false);
+  const [participantPage, setParticipantPage] = useState(0);
   const [focus, setFocus] = useState<"grid" | "share" | `video:${number}`>("grid");
   const [participants, setParticipants] = useState<ZoomParticipant[]>([]);
   const [permissions, setPermissions] = useState({ audio: false, video: false, screen_share: false });
@@ -148,6 +152,15 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
       console.error("Não foi possível listar os dispositivos da sala.", reason);
     });
   }, [deviceMenu]);
+
+  useEffect(() => {
+    const pageCount = Math.max(1, Math.ceil(participants.length / PARTICIPANTS_PER_PAGE));
+    const safePage = Math.min(participantPage, pageCount - 1);
+    const visibleIds = new Set(participants.slice(safePage * PARTICIPANTS_PER_PAGE, (safePage + 1) * PARTICIPANTS_PER_PAGE).map((participant) => String(participant.userId)));
+    container.current?.querySelectorAll<HTMLElement>("[data-zoom-user-id]").forEach((tile) => {
+      tile.classList.toggle("zoom-card-hidden", !visibleIds.has(tile.dataset.zoomUserId ?? ""));
+    });
+  }, [participantPage, participants]);
 
   useEffect(() => {
     if (!deviceMenu) return;
@@ -300,11 +313,12 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
     });
   }
 
-  function refreshParticipants() {
+  async function refreshParticipants() {
     if (clientRef.current) {
       const nextParticipants = clientRef.current.getAllUser();
       setParticipants(nextParticipants);
       syncParticipantTiles(nextParticipants);
+      await Promise.all(nextParticipants.filter((participant) => participant.bVideoOn && !videoPlayers.current.has(participant.userId)).map((participant) => attachVideo(participant.userId)));
     }
     if (!isHost.current) return;
     if (participantDirectoryTimer.current) clearTimeout(participantDirectoryTimer.current);
@@ -423,6 +437,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
     remoteShareUsesCanvas.current = false;
     activeShareUserIdRef.current = null;
     setActiveShareUserId(null);
+    setShareMaximized(false);
     setRemoteShareFallback(false);
     setFocus((current) => current === "share" ? "grid" : current);
   }
@@ -586,15 +601,16 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
         await stream.lockShare(!hasActiveStageSharer);
       }
 
-      client.on("user-added", refreshParticipants);
-      client.on("user-removed", refreshParticipants);
-      client.on("user-updated", refreshParticipants);
+      client.on("user-added", () => { void refreshParticipants(); });
+      client.on("user-removed", () => { void refreshParticipants(); });
+      client.on("user-updated", () => { void refreshParticipants(); });
       client.on("command-channel-message", async (payload) => {
         try {
           const command = JSON.parse(payload.text) as {
             type?: string;
             permissions?: ZoomJoinResponse["media_permissions"];
             caption?: LiveCaption;
+            control?: MediaControl;
           };
           const senderId = Number(payload.senderId);
           if (
@@ -623,10 +639,17 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
             await stream.stopVideo();
             setVideoOn(false);
           }
+          if (command.type === "stage.muted" && command.control === "audio") {
+            if (!stream.isAudioMuted()) await stream.muteAudio();
+            mediaStateRef.current.audioOn = false;
+            setAudioOn(false);
+            showMediaFeedback("O organizador desligou seu microfone", false);
+          }
           if (command.type === "stage.stop-share") {
             await stream.stopShareScreen();
             setSharing(false);
             setSharePreviewKind(null);
+            setShareMaximized(false);
           }
           if (command.type === "stage.request-audio") setMediaRequest({ senderId, control: "audio" });
           if (command.type === "stage.request-video") setMediaRequest({ senderId, control: "video" });
@@ -660,6 +683,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
       client.on("peer-video-state-change", async ({ action, userId }) => {
         if (action === "Start") await attachVideo(userId);
         else await detachVideo(userId);
+        void refreshParticipants();
       });
       client.on("active-share-change", async ({ state: shareState, userId }) => {
         try {
@@ -677,6 +701,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
         setSharePreviewKind(null);
         activeShareUserIdRef.current = null;
         setActiveShareUserId(null);
+        setShareMaximized(false);
         setFocus("grid");
         if (wasSharing) showMediaFeedback("Compartilhamento encerrado", false);
       });
@@ -787,6 +812,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
       setSharePreviewKind(null);
       activeShareUserIdRef.current = null;
       setActiveShareUserId(null);
+      setShareMaximized(false);
       setFocus("grid");
       showMediaFeedback("Compartilhamento encerrado", false);
       return;
@@ -968,6 +994,8 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
         showModerationFeedback(participant.userId, "audio", `Pedido de microfone enviado para ${participant.displayName}.`);
       } else {
         ensureZoomSuccess(await stream.muteAudio(participant.userId));
+        ensureZoomSuccess(await client.getCommandClient().send(JSON.stringify({ type: "stage.muted", control: "audio" }), participant.userId));
+        setParticipants((current) => current.map((item) => item.userId === participant.userId ? { ...item, muted: true } : item));
         showModerationFeedback(participant.userId, "audio", `Microfone de ${participant.displayName} desligado.`);
       }
     } catch (controlError) {
@@ -1103,6 +1131,8 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
 
   const hasActiveShare = sharing || activeShareUserId !== null;
   const focusClass = focus === "share" ? "share-focused" : focus.startsWith("video:") ? "video-focused" : "grid-focused";
+  const participantPageCount = Math.max(1, Math.ceil(participants.length / PARTICIPANTS_PER_PAGE));
+  const safeParticipantPage = Math.min(participantPage, participantPageCount - 1);
   const audienceParticipants = participants.filter((participant) => !participant.isHost && !participant.isManager);
   const onStageParticipantCount = audienceParticipants.filter((participant) => stageMembers[participantIdentity(participant)]?.status === "accepted").length;
   const normalizedParticipantSearch = normalizeSearch(participantSearch);
@@ -1117,13 +1147,19 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
 
   return (
     <div className="zoom-meeting-shell">
+      {hasActiveShare && <button type="button" className="zoom-share-maximize" aria-label={shareMaximized ? "Restaurar compartilhamento" : "Maximizar compartilhamento"} onClick={() => setShareMaximized((current) => !current)}>{shareMaximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}</button>}
       <div className="zoom-meeting-status">
         <span className="live-dot" /> AO VIVO · {role === "host" ? "ORGANIZADOR" : onStage ? "NO PALCO" : role === "viewer" ? "ESPECTADOR" : "PLATEIA"}
         {role === "host"
           ? <div className="zoom-meeting-actions">{activeRoomMode === "meeting" ? <button type="button" className="zoom-event-settings" onClick={copyRoomLink}>{linkCopied ? <Check size={14} /> : <Copy size={14} />} {linkCopied ? "Link copiado" : "Compartilhar sala"}</button> : <a className="zoom-event-settings" href={`/painel?event=${encodeURIComponent(eventId)}&tab=settings`} target="_blank" rel="noopener noreferrer"><Settings size={14} /> Configurar evento</a>}<button ref={participantTrigger} type="button" className="zoom-participant-trigger" aria-expanded={participantPanelOpen} aria-controls="zoom-participant-directory" onClick={() => setParticipantPanelOpen((current) => !current)}><Users size={14} /> Participantes <strong>{audienceParticipants.length}</strong></button></div>
           : activeRoomMode === "meeting" ? <div className="zoom-meeting-actions"><button type="button" className="zoom-event-settings" onClick={copyRoomLink}>{linkCopied ? <Check size={14} /> : <Copy size={14} />} {linkCopied ? "Link copiado" : "Compartilhar"}</button><span><Users size={14} /> {participants.length}</span></div> : <span><Users size={14} /> {participants.length}</span>}
       </div>
-      <div className={`zoom-media-stage ${hasActiveShare ? "has-share" : "no-share"} ${focusClass}`}>
+      {participantPageCount > 1 && !shareMaximized && <nav className="zoom-pagination" aria-label="PÃ¡ginas de participantes">
+        <button type="button" aria-label="Participantes anteriores" disabled={safeParticipantPage === 0} onClick={() => setParticipantPage((current) => Math.max(0, current - 1))}><ChevronLeft size={16} /></button>
+        <span>PÃ¡gina {safeParticipantPage + 1} de {participantPageCount}</span>
+        <button type="button" aria-label="PrÃ³ximos participantes" disabled={safeParticipantPage >= participantPageCount - 1} onClick={() => setParticipantPage((current) => Math.min(participantPageCount - 1, current + 1))}><ChevronLeft size={16} /></button>
+      </nav>}
+      <div className={`zoom-media-stage ${hasActiveShare ? "has-share" : "no-share"} ${focusClass}${shareMaximized ? " share-maximized" : ""}`}>
         <div className="zoom-video-grid" ref={container} aria-label="Participantes com vídeo" />
         <div className="zoom-share-surface" role="button" tabIndex={hasActiveShare ? 0 : -1} aria-hidden={!hasActiveShare} aria-label="Colocar compartilhamento de tela em destaque" onClick={() => setFocus("share")} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setFocus("share"); }}>
           <div className="zoom-remote-share" ref={shareContainer} />

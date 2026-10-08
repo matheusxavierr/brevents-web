@@ -78,7 +78,7 @@ export function MediaDeviceSetup({ value, onChange, active = true, stopPreviewRe
       preview.current?.replaceChildren();
       if (activeVideoTrack) {
         try {
-          const result = await activeVideoTrack.stop();
+          const result = await activeVideoTrack.stop().catch(() => undefined);
           if (result instanceof Error && result.message !== "VideoNotStartedError") throw result;
         } catch (reason) {
           const message = reason instanceof Error ? reason.message : String(reason);
@@ -102,6 +102,7 @@ export function MediaDeviceSetup({ value, onChange, active = true, stopPreviewRe
 
       try {
         if (value.audioEnabled) {
+          if (!navigator.mediaDevices?.getUserMedia) throw new Error("MEDIA_DEVICES_UNAVAILABLE");
           const nextAudioStream = await navigator.mediaDevices.getUserMedia({
             audio: { deviceId: value.audioDeviceId ? { exact: value.audioDeviceId } : undefined, noiseSuppression: value.noiseSuppression },
             video: false,
@@ -131,12 +132,33 @@ export function MediaDeviceSetup({ value, onChange, active = true, stopPreviewRe
             playerContainer.appendChild(player);
             preview.current.replaceChildren(playerContainer);
             videoTrack.current = track;
-            const result = await track.start(
-              player as Parameters<typeof track.start>[0],
-              { imageUrl: "blur", cropped: true },
-            );
-            if (result instanceof Error) throw result;
+            try {
+              const result = await track.start(
+                player as Parameters<typeof track.start>[0],
+                { imageUrl: "blur", cropped: true },
+              );
+              if (result instanceof Error) throw result;
+            } catch (blurReason) {
+              console.warn("Background blur is unavailable in the prejoin preview.", blurReason);
+              await track.stop().catch(() => undefined);
+              videoTrack.current = null;
+              const fallbackStream = await navigator.mediaDevices.getUserMedia({
+                audio: false,
+                video: { deviceId: value.videoDeviceId ? { exact: value.videoDeviceId } : undefined, width: { ideal: 1280 }, height: { ideal: 720 } },
+              });
+              const fallbackPlayer = document.createElement("video");
+              fallbackPlayer.autoplay = true;
+              fallbackPlayer.muted = true;
+              fallbackPlayer.playsInline = true;
+              fallbackPlayer.setAttribute("aria-label", "Camera preview");
+              fallbackPlayer.srcObject = fallbackStream;
+              preview.current.replaceChildren(fallbackPlayer);
+              videoStream.current = fallbackStream;
+              await fallbackPlayer.play();
+              setError("Background blur will be applied after you enter the meeting.");
+            }
           } else {
+            if (!navigator.mediaDevices?.getUserMedia) throw new Error("MEDIA_DEVICES_UNAVAILABLE");
             const nextVideoStream = await navigator.mediaDevices.getUserMedia({
               audio: false,
               video: {
@@ -188,6 +210,23 @@ export function MediaDeviceSetup({ value, onChange, active = true, stopPreviewRe
     onChange({ ...value, ...patch });
   }
 
+  async function toggleDevice(kind: "audio" | "video") {
+    const enabled = kind === "audio" ? value.audioEnabled : value.videoEnabled;
+    if (!enabled && navigator.mediaDevices?.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia(kind === "audio"
+          ? { audio: value.audioDeviceId ? { deviceId: { exact: value.audioDeviceId } } : true, video: false }
+          : { audio: false, video: value.videoDeviceId ? { deviceId: { exact: value.videoDeviceId } } : true });
+        stream.getTracks().forEach((track) => track.stop());
+      } catch (reason) {
+        console.warn("Media permission was not granted.", reason);
+        setError("Permita o acesso à câmera e ao microfone no navegador para continuar.");
+        return;
+      }
+    }
+    update(kind === "audio" ? { audioEnabled: !enabled } : { videoEnabled: !enabled });
+  }
+
   return (
     <div className="media-device-setup">
       <div className={`media-preview${previewState === "ready" ? " camera-on" : ""}`} aria-busy={previewState === "loading"}>
@@ -198,11 +237,11 @@ export function MediaDeviceSetup({ value, onChange, active = true, stopPreviewRe
       </div>
       <div className="media-device-controls">
         <div className="media-toggle-row">
-          <button type="button" className={value.audioEnabled ? "active" : ""} onClick={() => update({ audioEnabled: !value.audioEnabled })}>
+          <button type="button" className={value.audioEnabled ? "active" : ""} onClick={() => void toggleDevice("audio")}>
             {value.audioEnabled ? <Mic size={18} /> : <MicOff size={18} />}
             {value.audioEnabled ? "Microfone ligado" : "Microfone desligado"}
           </button>
-          <button type="button" className={value.videoEnabled ? "active" : ""} onClick={() => update({ videoEnabled: !value.videoEnabled })}>
+          <button type="button" className={value.videoEnabled ? "active" : ""} onClick={() => void toggleDevice("video")}>
             {value.videoEnabled ? <Camera size={18} /> : <CameraOff size={18} />}
             {value.videoEnabled ? "Câmera ligada" : "Câmera desligada"}
           </button>

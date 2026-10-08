@@ -470,6 +470,14 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .zoom-participant-trigger:hover, .zoom-participant-trigger[aria-expanded="true"] { background: rgb(255 255 255 / 13%); }
 .zoom-participant-trigger strong { display: grid; min-width: 20px; height: 20px; place-items: center; border-radius: 999px; background: var(--signal); font-size: .64rem; }
 .zoom-media-stage { position: relative; min-width: 0; min-height: 0; margin: 0 10px; overflow: hidden; border-radius: 20px; background: #00173e; }
+.zoom-card-hidden { display: none !important; }
+.zoom-pagination { position: absolute; z-index: 6; right: 22px; bottom: 82px; display: inline-flex; align-items: center; gap: 8px; border: 1px solid rgb(255 255 255 / 12%); border-radius: 999px; background: rgb(0 32 87 / 86%); color: white; padding: 5px 7px; font-size: .66rem; backdrop-filter: blur(10px); }
+.zoom-pagination button, .zoom-share-maximize { display: inline-grid; width: 29px; height: 29px; place-items: center; border: 1px solid rgb(255 255 255 / 15%); border-radius: 50%; background: rgb(255 255 255 / 8%); color: white; cursor: pointer; }
+.zoom-pagination button:last-child svg { transform: rotate(180deg); }
+.zoom-pagination button:disabled { cursor: not-allowed; opacity: .35; }
+.zoom-share-maximize { position: absolute; z-index: 20; top: 52px; right: 22px; }
+.zoom-media-stage.share-maximized .zoom-share-surface { z-index: 8; inset: 0 !important; border-radius: 0; }
+.zoom-media-stage.share-maximized .zoom-video-grid { visibility: hidden; pointer-events: none; }
 .zoom-video-grid, .zoom-video-sdk-container { position: absolute; inset: 0; min-width: 0; min-height: 0; }
 .zoom-video-sdk-container { display: grid !important; width: 100%; height: 100%; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 10px; padding: 10px; }
 .zoom-video-sdk-container video-player { display: block; width: 100%; height: 100%; min-height: 0; overflow: hidden; border: 0; border-radius: 18px; background: #001a46; cursor: pointer; object-fit: cover; animation: zoom-media-enter 220ms cubic-bezier(.2, .8, .2, 1); }
@@ -735,6 +743,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .zoom-media-stage.has-share.share-focused .zoom-video-sdk-container video-player,
   .zoom-media-stage.video-focused .zoom-video-sdk-container video-player { width: 106px; min-width: 106px; height: 60px; }
   .zoom-media-stage.has-share.video-focused .zoom-share-surface { right: 6px; bottom: 6px; width: 112px; height: 64px; }
+  .zoom-pagination { right: 12px; bottom: 70px; }
+  .zoom-share-maximize { top: 48px; right: 12px; }
   .zoom-media-label { top: 8px; left: 8px; max-width: calc(100% - 16px); overflow: hidden; font-size: .55rem; text-overflow: ellipsis; white-space: nowrap; }
   .zoom-participant-trigger { font-size: 0; }
   .zoom-participant-trigger strong { font-size: .62rem; }
@@ -2200,3 +2210,4 @@ section:nth-of-type(even) .eyebrow::before { background-image: url("/brand/star-
   .home-header.menu-open .home-header-inner { display: flex !important; flex-wrap: wrap !important; }
   .home-header.menu-open .home-product-switcher, .home-header.menu-open .home-account-nav { flex: 0 0 100% !important; }
 }
+.route-back-button { display: none !important; }
