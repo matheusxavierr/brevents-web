@@ -19,6 +19,7 @@ type MediaRequest = { senderId: number; control: MediaControl };
 type ZoomPresenceResponse = { token: string; expires_in: number };
 
 const PARTICIPANTS_PER_PAGE = 9;
+const SHARE_PARTICIPANTS_PER_PAGE = 6;
 
 function participantIdentity(participant: ZoomParticipant) {
   return String(participant.userKey ?? participant.userIdentity ?? "");
@@ -155,14 +156,16 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
     });
   }, [deviceMenu]);
 
+  const participantPageSize = focus === "share" ? SHARE_PARTICIPANTS_PER_PAGE : PARTICIPANTS_PER_PAGE;
+
   useEffect(() => {
-    const pageCount = Math.max(1, Math.ceil(participants.length / PARTICIPANTS_PER_PAGE));
+    const pageCount = Math.max(1, Math.ceil(participants.length / participantPageSize));
     const safePage = Math.min(participantPage, pageCount - 1);
-    const visibleIds = new Set(participants.slice(safePage * PARTICIPANTS_PER_PAGE, (safePage + 1) * PARTICIPANTS_PER_PAGE).map((participant) => String(participant.userId)));
+    const visibleIds = new Set(participants.slice(safePage * participantPageSize, (safePage + 1) * participantPageSize).map((participant) => String(participant.userId)));
     container.current?.querySelectorAll<HTMLElement>("[data-zoom-user-id]").forEach((tile) => {
       tile.classList.toggle("zoom-card-hidden", !visibleIds.has(tile.dataset.zoomUserId ?? ""));
     });
-  }, [participantPage, participants]);
+  }, [participantPage, participantPageSize, participants]);
 
   useEffect(() => {
     if (!deviceMenu) return;
@@ -1200,7 +1203,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
 
   const hasActiveShare = sharing || activeShareUserId !== null;
   const focusClass = focus === "share" ? "share-focused" : focus.startsWith("video:") ? "video-focused" : "grid-focused";
-  const participantPageCount = Math.max(1, Math.ceil(participants.length / PARTICIPANTS_PER_PAGE));
+  const participantPageCount = Math.max(1, Math.ceil(participants.length / participantPageSize));
   const safeParticipantPage = Math.min(participantPage, participantPageCount - 1);
   const audienceParticipants = participants.filter((participant) => !participant.isHost && !participant.isManager);
   const onStageParticipantCount = audienceParticipants.filter((participant) => stageMembers[participantIdentity(participant)]?.status === "accepted").length;
