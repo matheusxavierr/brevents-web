@@ -518,7 +518,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .zoom-media-stage.has-share.share-focused .zoom-participant-placeholder { width: 142px; min-width: 142px; max-width: 142px; height: 80px; min-height: 80px; flex: 0 0 142px; border: 2px solid rgb(255 255 255 / 12%); border-radius: 12px; }
 .zoom-media-stage.has-share.share-focused .zoom-participant-placeholder { gap: 3px; padding: 6px; }
 .zoom-media-stage.has-share.share-focused .zoom-participant-avatar { width: 34px; font-size: .82rem; }
-.zoom-media-stage.has-share.share-focused .zoom-participant-placeholder strong { font-size: .62rem; }
+.zoom-media-stage.has-share.share-focused .zoom-participant-placeholder strong { display: none; }
 .zoom-media-stage.has-share.share-focused .zoom-participant-placeholder small { font-size: .52rem; }
 .zoom-media-stage.video-focused .zoom-video-sdk-container { display: block !important; padding: 0; }
 .zoom-media-stage.video-focused .zoom-video-sdk-container video-player { position: absolute; z-index: 2; bottom: 12px; left: calc(12px + var(--thumbnail-offset, 0px)); width: 142px; height: 80px; border: 2px solid rgb(255 255 255 / 16%); border-radius: 12px; }
