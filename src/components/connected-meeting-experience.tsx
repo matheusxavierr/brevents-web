@@ -208,7 +208,7 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
           <button className="button meeting-copy-link" type="button" onClick={copyMeetingLink}>
             {copied ? <Check size={16} /> : <Copy size={16} />} {copied ? "Link copiado" : "Compartilhar"}
           </button>
-          {onExit ? <button className="button live-exit" type="button" onClick={onExit}><ChevronLeft size={16} /> Encerrar conversa</button> : <Link className="button live-exit" href={exitHref}><ChevronLeft size={16} /> Voltar para a página principal</Link>}
+          {onExit ? <button className="button live-exit" type="button" onClick={onExit}><ChevronLeft size={16} /> Encerrar conversa</button> : <Link className="button live-exit" href={exitHref}><ChevronLeft size={16} /> Voltar pra Home</Link>}
         </div>
       </header>
       <div className={`live-layout${interactionHidden ? " meeting-panel-hidden" : ""}`}>
