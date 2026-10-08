@@ -1216,7 +1216,6 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
 
   return (
     <div className="zoom-meeting-shell">
-      {hasActiveShare && <button type="button" className="zoom-share-maximize" aria-label={shareMaximized ? "Restaurar compartilhamento" : "Maximizar compartilhamento"} onClick={() => setShareMaximized((current) => !current)}>{shareMaximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}</button>}
       <div className="zoom-meeting-status">
         <span className="live-dot" /> AO VIVO · {role === "host" ? "ORGANIZADOR" : onStage ? "NO PALCO" : role === "viewer" ? "ESPECTADOR" : "PLATEIA"}
         {role === "host"
@@ -1237,6 +1236,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
           <canvas className={sharing && sharePreviewKind === "canvas" ? "zoom-local-share active" : "zoom-local-share"} ref={sharePreviewCanvas} aria-label="Prévia da sua tela compartilhada" />
           <span className="zoom-media-label"><MonitorUp size={14} /> {sharing ? "Você está compartilhando" : "Tela compartilhada"}</span>
         </div>
+        {hasActiveShare && !sharing && <button type="button" className="zoom-share-maximize" aria-label={shareMaximized ? "Restaurar compartilhamento" : "Maximizar compartilhamento"} onClick={() => setShareMaximized((current) => !current)}>{shareMaximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}</button>}
       </div>
       {stageInvite && <div className="stage-invite" role="dialog" aria-label="Convite para o palco"><strong>O organizador convidou você para o palco.</strong><span>Você decide se quer liberar microfone e câmera.</span><div><button type="button" className="button button-primary" onClick={acceptStageInvite}>Aceitar convite</button><button type="button" className="button button-secondary" onClick={() => setStageInvite(null)}>Agora não</button></div></div>}
       {mediaRequest && <div className="stage-invite" role="dialog" aria-label="Solicitação do organizador"><strong>Solicitação do organizador</strong><span>{mediaRequest.control === "audio" ? "Ligar seu microfone?" : mediaRequest.control === "video" ? "Ligar sua câmera?" : "Compartilhar sua tela?"}</span><div><button type="button" className="button button-primary" onClick={acceptMediaRequest}>Aceitar</button><button type="button" className="button button-secondary" onClick={() => setMediaRequest(null)}>Agora não</button></div></div>}

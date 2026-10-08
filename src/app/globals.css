@@ -475,7 +475,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .zoom-pagination button, .zoom-share-maximize { display: inline-grid; width: 29px; height: 29px; place-items: center; border: 1px solid rgb(255 255 255 / 15%); border-radius: 50%; background: rgb(255 255 255 / 8%); color: white; cursor: pointer; }
 .zoom-pagination button:last-child svg { transform: rotate(180deg); }
 .zoom-pagination button:disabled { cursor: not-allowed; opacity: .35; }
-.zoom-share-maximize { position: absolute; z-index: 20; top: 52px; right: 22px; }
+.zoom-share-maximize { position: absolute; z-index: 20; right: 22px; bottom: 22px; background: rgb(0 32 87 / 86%); backdrop-filter: blur(8px); }
+.zoom-media-stage.share-focused .zoom-share-maximize { bottom: 118px; }
 .zoom-media-stage.share-maximized .zoom-share-surface { z-index: 8; inset: 0 !important; border-radius: 0; animation: zoom-share-maximize 280ms cubic-bezier(.2, .8, .2, 1); }
 .zoom-media-stage.share-maximized .zoom-video-grid { visibility: hidden; pointer-events: none; }
 .zoom-video-grid, .zoom-video-sdk-container { position: absolute; inset: 0; min-width: 0; min-height: 0; }
@@ -764,7 +765,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .zoom-media-stage.has-share.video-focused .zoom-share-surface { right: 6px; bottom: 6px; width: 112px; height: 64px; }
   .zoom-media-stage.has-share.grid-focused .zoom-share-surface { right: 6px; bottom: 6px; width: 112px; height: 64px; }
   .zoom-pagination { right: 12px; bottom: 70px; }
-  .zoom-share-maximize { top: 48px; right: 12px; }
+  .zoom-share-maximize { right: 12px; bottom: 12px; }
+  .zoom-media-stage.share-focused .zoom-share-maximize { bottom: 88px; }
   .zoom-media-label { top: 8px; left: 8px; max-width: calc(100% - 16px); overflow: hidden; font-size: .55rem; text-overflow: ellipsis; white-space: nowrap; }
   .zoom-participant-trigger { font-size: 0; }
   .zoom-participant-trigger strong { font-size: .62rem; }
