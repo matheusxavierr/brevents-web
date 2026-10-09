@@ -1,9 +1,9 @@
 "use client";
 
-import { Check, ChevronLeft, Copy, FileText, LockKeyhole, MessageSquare, PanelRightClose, PanelRightOpen, Send } from "lucide-react";
+import { ChevronLeft, FileText, LockKeyhole, MessageSquare, PanelRightClose, PanelRightOpen, Send } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { CSSProperties, FormEvent, PointerEvent, useEffect, useRef, useState } from "react";
 
 import { ApiError, apiClient } from "@/lib/api-client";
 import type { ChatChannel, ChatMessage, EventData, LiveCaption, Paginated, Room, User } from "@/lib/api-types";
@@ -32,10 +32,14 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
   const [realtimeNotice, setRealtimeNotice] = useState("");
   const [connected, setConnected] = useState(false);
   const [inRoom, setInRoom] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [sheetHeight, setSheetHeight] = useState(32);
+  const [sheetDragging, setSheetDragging] = useState(false);
+  const sheetDrag = useRef<{ y: number; height: number } | null>(null);
   const [interactionHidden, setInteractionHidden] = useState(false);
+  const [exitConfirmationOpen, setExitConfirmationOpen] = useState(false);
   const socket = useRef<WebSocket | null>(null);
   const requestId = useRef(1);
+  const interactionContentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleSessionExpired = () => {
@@ -183,6 +187,14 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
     setCaptions((current) => current.some((item) => item.id === caption.id) ? current : [...current, caption]);
   }
 
+  useEffect(() => {
+    const content = interactionContentRef.current;
+    const entries = tab === "chat" ? messages : captions;
+    if (!inRoom || !content || entries.length === 0) return;
+    const frame = window.requestAnimationFrame(() => content.scrollTo({ top: content.scrollHeight, behavior: "smooth" }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [captions, inRoom, messages, tab]);
+
   function sendMessage(formEvent: FormEvent<HTMLFormElement>) {
     formEvent.preventDefault();
     const body = message.trim();
@@ -191,10 +203,31 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
     setMessage("");
   }
 
-  async function copyMeetingLink() {
-    await navigator.clipboard.writeText(window.location.href);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1_800);
+  function startSheetDrag(event: PointerEvent<HTMLButtonElement>) {
+    sheetDrag.current = { y: event.clientY, height: sheetHeight };
+    setSheetDragging(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function moveSheetDrag(event: PointerEvent<HTMLButtonElement>) {
+    if (!sheetDrag.current) return;
+    const delta = (sheetDrag.current.y - event.clientY) / window.innerHeight * 100;
+    setSheetHeight(Math.min(50, Math.max(5, sheetDrag.current.height + delta)));
+  }
+
+  function endSheetDrag() {
+    sheetDrag.current = null;
+    setSheetDragging(false);
+    setSheetHeight((height) => height < 15 ? 5 : height > 41 ? 50 : 32);
+  }
+
+  function confirmExit() {
+    setExitConfirmationOpen(false);
+    if (onExit) {
+      onExit();
+      return;
+    }
+    router.push(exitHref);
   }
 
   if (!room) return <main className="empty-state"><h1>Esta reunião não possui uma sala.</h1><Link className="button button-secondary" href="/">Voltar ao início</Link></main>;
@@ -205,13 +238,10 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
         <div className="container live-header-inner">
           <Brand />
           <span className="live-header-title">{event.name} · {inRoom ? connected ? "conectado" : "reunião ativa · reconectando chat" : "pré-sala"}</span>
-          <button className="button meeting-copy-link" type="button" onClick={copyMeetingLink}>
-            {copied ? <Check size={16} /> : <Copy size={16} />} {copied ? "Link copiado" : "Compartilhar"}
-          </button>
-          {onExit ? <button className="button live-exit" type="button" onClick={onExit}><ChevronLeft size={16} /> Encerrar conversa</button> : <Link className="button live-exit" href={exitHref}><ChevronLeft size={16} /> Voltar pra Home</Link>}
+          <button className="button live-exit" type="button" onClick={() => setExitConfirmationOpen(true)}><ChevronLeft size={16} /><span className="live-exit-desktop">{onExit ? "Encerrar conversa" : "Voltar pra Home"}</span><span className="live-exit-mobile">Voltar</span></button>
         </div>
       </header>
-      <div className={`live-layout${interactionHidden ? " meeting-panel-hidden" : ""}`}>
+      <div className={`live-layout${interactionHidden ? " meeting-panel-hidden" : ""}${!inRoom ? " meeting-prejoin-layout" : ""}${sheetDragging ? " meeting-sheet-dragging" : ""}${sheetHeight === 5 ? " meeting-sheet-collapsed" : ""}`} style={{ "--meeting-sheet-height": `${sheetHeight}dvh` } as CSSProperties}>
         <section className="video-column" aria-label="Reunião ao vivo">
           <div className="video-player">
             {accessGranted && room.zoom_session
@@ -222,6 +252,7 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
           {realtimeNotice && <p className="live-error" role="status">{realtimeNotice}</p>}
         </section>
         <aside className={`interaction-panel meeting-interaction-panel${inRoom ? "" : " meeting-interaction-locked"}`}>
+          {inRoom && <button type="button" className="meeting-sheet-handle" aria-label="Arrastar para ajustar o chat" aria-expanded={sheetHeight !== 5} onPointerDown={startSheetDrag} onPointerMove={moveSheetDrag} onPointerUp={endSheetDrag} onPointerCancel={endSheetDrag} onKeyDown={(event) => { if (event.key === "ArrowUp" || event.key === "ArrowDown") { event.preventDefault(); setSheetHeight((height) => event.key === "ArrowUp" ? height === 5 ? 32 : 50 : height === 50 ? 32 : 5); } }}><span /></button>}
           {inRoom && <button className="meeting-panel-toggle" type="button" aria-label={interactionHidden ? "Mostrar chat e transcrição" : "Ocultar chat e transcrição"} aria-expanded={!interactionHidden} onClick={() => setInteractionHidden((current) => !current)}>{interactionHidden ? <PanelRightOpen size={17} /> : <PanelRightClose size={17} />}</button>}
           {!inRoom ? <div className="meeting-access-locked">
             <span><LockKeyhole size={22} /></span>
@@ -232,7 +263,7 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
             <button className={`interaction-tab${tab === "chat" ? " active" : ""}`} role="tab" aria-selected={tab === "chat"} onClick={() => setTab("chat")}><MessageSquare size={15} /> Chat</button>
             <button className={`interaction-tab${tab === "transcript" ? " active" : ""}`} role="tab" aria-selected={tab === "transcript"} onClick={() => setTab("transcript")}><FileText size={15} /> Transcrição</button>
           </div>
-          <div className="interaction-content">
+          <div className="interaction-content" ref={interactionContentRef}>
             {tab === "chat" && (messages.length
               ? messages.map((item) => <article className="message" key={item.id}><span className="avatar">{(item.sender?.first_name || item.sender?.name || item.sender?.username || "?").slice(0, 2).toUpperCase()}</span><div><strong>{item.sender ? item.sender.name || `${item.sender.first_name ?? ""} ${item.sender.last_name ?? ""}`.trim() || item.sender.username : "Participante"}</strong><time>{formatChatTime(item.created_at)}</time><p>{item.body}</p></div></article>)
               : <div className="meeting-panel-empty"><MessageSquare size={24} /><strong>Conversa aberta</strong><span>As mensagens da reunião aparecerão aqui.</span></div>)}
@@ -244,6 +275,15 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
           </>}
         </aside>
       </div>
+      {exitConfirmationOpen && <div className="meeting-confirm-backdrop" role="presentation" onMouseDown={() => setExitConfirmationOpen(false)}>
+        <section className="meeting-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="leave-meeting-title" onMouseDown={(event) => event.stopPropagation()}>
+          <ChevronLeft size={24} aria-hidden="true" />
+          <p className="eyebrow">Sair da reunião</p>
+          <h2 id="leave-meeting-title">Quer voltar para a Home?</h2>
+          <p>Você sairá desta sala e poderá entrar novamente pelo link enquanto a reunião estiver aberta.</p>
+          <div className="meeting-confirm-actions"><button className="button button-secondary" type="button" onClick={() => setExitConfirmationOpen(false)}>Continuar na reunião</button><button className="button button-primary" type="button" onClick={confirmExit}>Voltar para a Home</button></div>
+        </section>
+      </div>}
     </main>
   );
 }

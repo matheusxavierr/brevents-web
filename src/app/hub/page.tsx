@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
-import { CompanyHubWorkspace } from "@/components/company-hub-workspace";
+import { CompanyHubIntroduction } from "@/components/company-hub-introduction";
 
 export const metadata: Metadata = { title: "Hub da empresa" };
 
 export default function CompanyHubPage() {
-  return <CompanyHubWorkspace />;
+  return <CompanyHubIntroduction />;
 }

@@ -1,0 +1,41 @@
+.gallery { padding-bottom: 56px; }
+.intro { max-width: 780px; margin-bottom: 30px; }
+.intro h2 { margin: 12px 0 16px; font-size: clamp(1.9rem, 3vw, 2.8rem); line-height: 1.15; letter-spacing: -.035em; }
+.intro > p:last-child { color: var(--muted); font-size: .95rem; }
+.layout { display: grid; grid-template-columns: minmax(0, .72fr) minmax(0, 1.7fr); align-items: start; gap: 28px; }
+.details { min-width: 0; }
+.navigation { display: grid; gap: 8px; margin-bottom: 26px; }
+.navigation button { display: flex; min-height: 52px; align-items: center; gap: 12px; border: 1px solid var(--line); border-radius: 14px; background: white; color: var(--muted); padding: 14px 16px; font-size: .82rem; font-weight: 600; text-align: left; cursor: pointer; transition: background 180ms ease, color 180ms ease; }
+.navigation button[aria-pressed="true"] { border-color: var(--signal); background: var(--signal); color: white; }
+.navigation button > svg { flex-shrink: 0; }
+.description h3 { margin: 0 0 12px; font-size: 1.35rem; line-height: 1.35; }
+.description p { margin: 0; color: var(--muted); font-size: .85rem; line-height: 1.8; }
+.description ul { display: grid; gap: 12px; margin: 22px 0 0; padding: 0; list-style: none; }
+.description li { display: flex; align-items: center; gap: 9px; font-size: .78rem; }
+.description li svg { flex-shrink: 0; color: var(--digital); }
+.figure { min-width: 0; margin: 0; }
+.imageFrame { position: relative; overflow: hidden; border: 1px solid #d5deee; border-radius: 22px; background: #eaf0f8; box-shadow: 0 18px 45px rgb(0 44 112 / 9%); animation: preview-appear 260ms ease both; }
+.image { display: block; width: 100%; height: auto; }
+.expand { position: absolute; right: 12px; bottom: 12px; display: inline-flex; min-height: 38px; align-items: center; gap: 7px; border: 1px solid rgb(255 255 255 / 25%); border-radius: 999px; background: #002c70; color: white; padding: 8px 12px; font-size: .68rem; font-weight: 600; cursor: pointer; box-shadow: 0 4px 10px rgb(0 0 0 / 12%); }
+.figure figcaption { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; color: var(--muted); font-size: .68rem; }
+.figure figcaption span { border-radius: 999px; background: #e4edfc; color: var(--signal); padding: 5px 9px; font-weight: 700; }
+.dialog { width: min(96vw, 1280px); max-height: 92dvh; margin: auto; overflow: auto; border: 0; border-radius: 24px; background: white; color: var(--ink); padding: 18px; box-shadow: 0 30px 80px rgb(0 0 0 / 30%); }
+.dialog::backdrop { background: rgb(0 24 66 / 75%); backdrop-filter: blur(5px); }
+.dialogHeader { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.dialogHeader h2 { margin: 0; font-size: 1rem; }
+.dialogHeader button { display: grid; width: 44px; height: 44px; flex-shrink: 0; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: white; color: var(--ink); cursor: pointer; }
+.expandedCanvas { overflow: auto; border-radius: 16px; }
+.expandedImage { display: block; width: 100%; min-width: 900px; height: auto; }
+.dialog > p { margin: 12px 0 0; color: var(--muted); font-size: .7rem; }
+.dialog > p span { display: none; }
+@keyframes preview-appear { from { opacity: .5; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 960px) {
+  .gallery { padding-bottom: 38px; }
+  .layout { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+  .navigation { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; padding: 2px; }
+  .navigation button { flex-shrink: 0; min-height: 44px; padding: 10px 12px; font-size: .75rem; }
+  .description ul { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 16px; }
+  .imageFrame { border-radius: 16px; }
+  .dialog > p span { display: inline; }
+}
+@media (prefers-reduced-motion: reduce) { .imageFrame { animation: none; } .navigation button { transition: none; } }

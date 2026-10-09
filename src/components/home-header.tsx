@@ -45,7 +45,7 @@ export function HomeHeader() {
             Meetings
           </Link>
           {user && (
-            <Link className={pathname === "/hub" ? "active" : undefined} href="/hub">
+            <Link className={pathname.startsWith("/hub") ? "active" : undefined} href="/hub">
               Hub da empresa
             </Link>
           )}

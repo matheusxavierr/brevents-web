@@ -4,7 +4,6 @@ import {
   ArrowRight,
   Asterisk,
   CircleDot,
-  Diamond,
   Grid3X3,
   Hexagon,
   Radio,
@@ -18,12 +17,13 @@ import { FormEvent, useState } from "react";
 import { apiClient } from "@/lib/api-client";
 import { HomeHeader } from "./home-header";
 import { useSession } from "./session-provider";
+import { ProductPreviewGallery } from "./product-preview-gallery";
 
 const eventFeatures = [
   { icon: CircleDot, title: "Inscrição pública sem conta", description: "Qualquer pessoa entra com link, sem criar login." },
-  { icon: Asterisk, title: "Palco moderado e convidados", description: "Controle quem sobe ao palco a qualquer momento." },
-  { icon: Grid3X3, title: "Agenda, chat, Q&A e enquetes", description: "Interação em tempo real durante toda a sessão." },
-  { icon: Diamond, title: "Gravação, analytics e white-label", description: "Conteúdo on-demand com sua marca em todo lugar." },
+  { icon: Asterisk, title: "Palcos e convidados", description: "Conduza a transmissão e convide participantes ao palco." },
+  { icon: Users, title: "Lobby e rodadas de negócios", description: "Encontros 1:1 entre participantes do seu evento." },
+  { icon: Grid3X3, title: "Organização em um só painel", description: "Programação, palestrantes, inscrições e interações sob controle." },
 ];
 
 const meetingFeatures = [
@@ -53,11 +53,11 @@ export function ServiceLanding({ kind }: { kind: "event" | "meeting" }) {
             </span>
             <p className="eyebrow">BR Events · {isEvent ? "Web Events" : "Meetings"}</p>
           </div>
-          <h1>{isEvent ? "Seu evento ao vivo, do convite ao on-demand." : "Reuniões com a sua marca e sem sair da plataforma."}</h1>
+          <h1>{isEvent ? "Seu evento vai além do palco." : "Reuniões que aproximam pessoas e ideias."}</h1>
           <p className="service-lead">
             {isEvent
-              ? "Crie experiências de transmissão com audiência, programação, interação e palco sob controle da organização."
-              : "Abra salas colaborativas para equipes, clientes, rodadas de negócio e encontros em tempo real."}
+              ? "Palcos para compartilhar ideias, um lobby para criar conexões e rodadas de negócios para conversar de perto. Tudo coordenado pela organização."
+              : "Câmera, microfone, tela compartilhada e uma conversa que continua no chat. Uma sala para equipes e clientes, dentro do BR Events."}
           </p>
           <div className="hero-actions">
             {canCreate ? (
@@ -75,8 +75,9 @@ export function ServiceLanding({ kind }: { kind: "event" | "meeting" }) {
               </>
             )}
           </div>
-          {isEvent && !canCreateEvent && <WebEventConsultation />}
         </section>
+
+        <ProductPreviewGallery key={kind} kind={kind} />
 
         <section className="container service-features" aria-label="Recursos do serviço">
           {features.map(({ icon: Icon, title, description }) => (
@@ -110,6 +111,7 @@ export function ServiceLanding({ kind }: { kind: "event" | "meeting" }) {
             </article>
           </div>
         </section>
+        {isEvent && !canCreateEvent && <div className="container"><WebEventConsultation /></div>}
       </main>
     </>
   );

@@ -1,0 +1,12 @@
+.editor { display: grid; min-width: 0; gap: 16px; margin: 14px 0 0; border: 0; border-top: 1px solid var(--line); padding: 22px 0 6px; }
+.editor legend { display: flex; align-items: center; gap: 8px; padding-right: 14px; font-size: 1rem; font-weight: 700; }
+.heading { display: flex; align-items: flex-start; gap: 16px; }
+.heading p { margin: 0; color: var(--muted); font-size: .82rem; }
+.heading > span { flex-shrink: 0; border-radius: 999px; background: var(--soft); padding: 5px 10px; font-size: .75rem; font-weight: 700; }
+.item { display: grid; min-width: 0; gap: 14px; border: 1px solid var(--line); border-radius: 18px; background: var(--canvas); padding: 18px; }
+.itemHeading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.remove { display: inline-flex; min-height: 40px; align-items: center; gap: 6px; border: 0; border-radius: 999px; background: white; color: #9f1239; padding: 8px 12px; font-size: .75rem; cursor: pointer; }
+.remove:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+.empty { border: 1px dashed var(--line); border-radius: 16px; color: var(--muted); padding: 18px; font-size: .82rem; }
+.limit { color: var(--muted); font-size: .75rem; }
+@media (max-width: 640px) { .item { padding: 14px; } .editor > button { width: 100%; } }

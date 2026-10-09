@@ -1,7 +1,33 @@
 import Link from "next/link";
 import { ArrowRight, BarChart3, MessagesSquare, Radio, ShieldCheck, Users } from "lucide-react";
 import { HomeHeader } from "@/components/home-header";
+import { ProductPreviewImage } from "@/components/product-preview-image";
+import styles from "@/components/home-showcase.module.css";
 
 export default function Home() {
-  return <><HomeHeader /><main className="home-page"><section className="home-hero"><div className="container home-hero-grid"><div className="home-hero-copy"><p className="eyebrow">Eventos e reuniões em uma só plataforma</p><h1>Ao vivo com direção.<br />{" "}Perto mesmo à distância.</h1><p>Crie web events completos ou abra reuniões colaborativas com tecnologia Zoom, identidade própria e operação centralizada.</p><div className="hero-actions"><Link className="button button-primary" href="/servicos/web-events">Criar Web Event <ArrowRight size={17} /></Link><Link className="button button-secondary" href="/servicos/meetings">Criar Meeting</Link></div></div><div className="home-stage"><span className="live-pill"><span className="live-dot" /> No ar</span><div><small>PALCO PRINCIPAL · 320 ASSISTINDO</small><h2>Experiências que colocam pessoas no centro.</h2></div><div className="home-stage-bars" aria-hidden="true"><i /><i /><i /><i /><i /></div></div></div></section><section className="container home-products" aria-label="Soluções BR Events"><article><span className="home-product-icon"><Radio size={22} /></span><p className="eyebrow">Web Events</p><h2>Transmita para uma audiência.</h2><p>Inscrições, agenda, palco moderado, chat, perguntas, tradução e conteúdo on-demand.</p><Link href="/servicos/web-events">Conhecer Web Events <ArrowRight size={15} /></Link></article><article><span className="home-product-icon"><Users size={22} /></span><p className="eyebrow">Meetings</p><h2>Encontre e colabore.</h2><p>Salas com câmera, microfone, compartilhamento e moderação para conversas de verdade.</p><Link href="/servicos/meetings">Conhecer Meetings <ArrowRight size={15} /></Link></article></section><section className="container home-capabilities" aria-label="Recursos da plataforma"><div><span className="home-capability-icon"><ShieldCheck /></span><strong>White-label</strong><span>Sua marca em cada ponto de contato.</span></div><div><span className="home-capability-icon"><MessagesSquare /></span><strong>Interação</strong><span>Chat, Q&A, enquetes e palco.</span></div><div><span className="home-capability-icon"><BarChart3 /></span><strong>Dados</strong><span>Inscrições, audiência e engajamento.</span></div></section></main></>;
+  return <>
+    <HomeHeader />
+    <main className="home-page">
+      <section className={styles.hero}>
+        <div className={`container ${styles.heroGrid}`}>
+          <div className={styles.copy}>
+            <p className="eyebrow">Eventos e reuniões em uma só plataforma</p>
+            <h1>Ao vivo com direção.<br />Perto mesmo à distância.</h1>
+            <p>Crie web events completos ou abra reuniões colaborativas com tecnologia Zoom, identidade própria e operação centralizada.</p>
+            <div><Link className="button button-primary" href="/servicos/web-events">Conhecer Web Events <ArrowRight size={17} /></Link><Link className="button button-secondary" href="/servicos/meetings">Conhecer Meetings</Link></div>
+          </div>
+          <figure className={styles.heroVisual}>
+            <div className={styles.mainPreview}><span><Radio size={15} aria-hidden="true" /> Web Events · O seu palco, ao vivo</span><ProductPreviewImage kind="event" sizes="(max-width: 800px) 100vw, 55vw" preload /></div>
+            <div className={styles.miniPreview}><span><Users size={13} aria-hidden="true" /> Meetings · Todo mundo na conversa</span><ProductPreviewImage kind="meeting" sizes="(max-width: 800px) 65vw, 35vw" /></div>
+            <figcaption>Prévia da plataforma com eventos e participantes fictícios.</figcaption>
+          </figure>
+        </div>
+      </section>
+      <section className={`container ${styles.products}`} aria-label="Soluções BR Events">
+        <article className={styles.product}><div className={styles.productImage}><ProductPreviewImage kind="networking" sizes="(max-width: 800px) 100vw, 50vw" /></div><div className={styles.productCopy}><p className="eyebrow">Web Events</p><h2>Do palco à próxima conexão.</h2><p>Palcos para transmitir, um lobby com rodadas de negócios 1:1 e um painel para a organização conduzir cada etapa do evento.</p><Link href="/servicos/web-events">Conhecer Web Events <ArrowRight size={15} /></Link></div></article>
+        <article className={styles.product}><div className={styles.productImage}><ProductPreviewImage kind="meeting" sizes="(max-width: 800px) 100vw, 50vw" /></div><div className={styles.productCopy}><p className="eyebrow">Meetings</p><h2>Encontre, converse e colabore.</h2><p>Câmera, microfone, compartilhamento de tela, chat e transcrição em uma sala organizada para equipes, clientes e boas conversas.</p><Link href="/servicos/meetings">Conhecer Meetings <ArrowRight size={15} /></Link></div></article>
+      </section>
+      <section className="container home-capabilities" aria-label="Recursos da plataforma"><div><span className="home-capability-icon"><ShieldCheck /></span><strong>Sua identidade</strong><span>Sua empresa e seus encontros dentro do BR Events.</span></div><div><span className="home-capability-icon"><MessagesSquare /></span><strong>Interação</strong><span>Chat, perguntas, enquetes e conversas 1:1.</span></div><div><span className="home-capability-icon"><BarChart3 /></span><strong>Organização</strong><span>Programação, inscrições e público em um só painel.</span></div></section>
+    </main>
+  </>;
 }

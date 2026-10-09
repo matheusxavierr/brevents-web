@@ -101,6 +101,14 @@ export type LiveCaption = {
   created_at: string;
 };
 
+export type CompanyShowcaseItem = {
+  name: string;
+  item_type: "product" | "service" | "other";
+  description: string;
+  image_url: string;
+  price?: string | null;
+};
+
 export type Organization = {
   id: string;
   owner?: Pick<User, "id" | "username" | "first_name" | "last_name" | "email">;
@@ -116,6 +124,7 @@ export type Organization = {
   contact_phone: string;
   website_url: string;
   social_links: Record<string, string>;
+  showcase_items?: CompanyShowcaseItem[];
   custom_domain: string | null;
   branding: Record<string, string>;
   feature_flags: Record<string, boolean>;

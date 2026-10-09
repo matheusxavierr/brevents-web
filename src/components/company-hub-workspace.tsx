@@ -14,7 +14,7 @@ export function CompanyHubWorkspace() {
   const { user } = useSession();
 
   useEffect(() => {
-    if (!user) router.replace(`/entrar?next=${encodeURIComponent("/hub")}`);
+    if (!user) router.replace(`/entrar?next=${encodeURIComponent("/hub/configurar")}`);
   }, [router, user]);
 
   if (!user) {
@@ -32,7 +32,7 @@ export function CompanyHubWorkspace() {
       <main className="hub-workspace-page">
         <div className="container hub-workspace-breadcrumb">
           <span><Building2 size={15} /> Área da empresa</span>
-          <Link href="/">Voltar para o início</Link>
+          <Link href="/hub">Sobre o hub da empresa</Link>
         </div>
         <section className="container hub-workspace-content">
           <CompanyHubAdmin />
