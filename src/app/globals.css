@@ -550,6 +550,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .zoom-background-options { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
 .zoom-controls .zoom-background-options button { min-width: 0; border-radius: 10px; padding: 9px; font-size: .68rem; }
 .zoom-controls .zoom-background-options button.selected { border-color: var(--digital); background: rgb(36 130 79 / 28%); }
+.zoom-flip-camera { display: inline-flex !important; min-width: 0 !important; align-items: center; justify-content: flex-start !important; gap: 8px !important; border-radius: 10px !important; padding: 9px 10px !important; font-size: .7rem; }
+.zoom-flip-camera:disabled { cursor: not-allowed !important; opacity: .42; }
 .live-caption-control { position: relative; }
 .live-caption-menu { position: absolute; z-index: 12; bottom: calc(100% + 12px); left: 50%; display: grid; width: min(380px, calc(100vw - 28px)); gap: 12px; border: 1px solid rgb(255 255 255 / 14%); border-radius: 18px; background: #002c70; color: white; padding: 16px; text-align: left; transform: translateX(-50%); box-shadow: 0 22px 65px rgb(0 0 0 / 48%); }
 .live-caption-menu header, .live-caption-menu header > span, .live-caption-speaker-setting, .live-caption-speaker-setting > span { display: flex; align-items: center; }
@@ -2247,3 +2249,37 @@ section:nth-of-type(even) .eyebrow::before { background-image: url("/brand/star-
   .home-header.menu-open .home-product-switcher, .home-header.menu-open .home-account-nav { flex: 0 0 100% !important; }
 }
 .route-back-button { display: none !important; }
+
+@media (max-width: 960px) {
+  .meeting-live-page { height: 100dvh; }
+  .meeting-live-page .live-header { padding: 6px 8px 0; }
+  .meeting-live-page .live-header-inner { min-height: 52px; gap: 8px; border-radius: 16px; padding-inline: 12px; }
+  .meeting-live-page .live-header .brand { font-size: 1.1rem; }
+  .meeting-live-page .live-header-title { font-size: .62rem; }
+  .meeting-live-page .live-layout { height: calc(100dvh - 58px); min-height: 0; grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, min(34dvh, 320px)); }
+  .meeting-live-page .video-column { height: auto; min-height: 0; padding: 8px; }
+  .meeting-live-page .video-player { min-height: 0; }
+  .meeting-live-page .interaction-panel { min-height: 0; max-height: none; margin: 0 8px 8px; border-radius: 18px; }
+  .meeting-live-page .meeting-panel-hidden { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) 52px; }
+  .meeting-live-page .meeting-panel-hidden .interaction-panel { height: 52px; min-height: 52px; max-height: 52px; margin: 0 8px 8px; }
+  .zoom-media-stage { margin: 0 6px; border-radius: 14px; }
+  .zoom-video-sdk-container { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 6px; }
+  .zoom-controls { flex-wrap: nowrap; justify-content: flex-start; gap: 6px; overflow-x: auto; padding: 8px 10px max(8px, env(safe-area-inset-bottom)); scrollbar-width: none; }
+  .zoom-controls::-webkit-scrollbar { display: none; }
+  .zoom-controls > * { flex: 0 0 auto; }
+  .zoom-controls button { min-height: 44px; }
+}
+
+@media (max-width: 640px) {
+  .meeting-live-page .live-header-title { max-width: 42vw; }
+  .meeting-live-page .live-exit { min-width: 42px; padding-inline: 11px; font-size: 0; }
+  .meeting-live-page .live-exit svg { margin: 0; }
+  .zoom-controls .zoom-control-combo > .zoom-control-main { min-width: 44px; padding-inline: 11px; }
+  .zoom-controls .zoom-control-combo > .zoom-control-arrow { min-width: 30px; }
+  .zoom-prejoin { min-height: 100%; align-content: start; gap: 12px; overflow-y: auto; padding: 20px 14px 28px; }
+  .zoom-prejoin h1 { max-width: 100%; font-size: clamp(2rem, 11vw, 3rem); }
+  .zoom-prejoin > p { font-size: .8rem; line-height: 1.4; }
+  .zoom-prejoin .media-device-setup { width: 100%; max-height: none; grid-template-columns: 1fr; gap: 10px; }
+  .zoom-prejoin .media-preview { height: clamp(180px, 32vh, 260px); min-height: 0; }
+  .zoom-prejoin .media-device-controls { gap: 8px; }
+}

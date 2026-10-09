@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ChevronLeft, ChevronUp, Copy, Maximize2, Mic, MicOff, Minimize2, MonitorUp, MonitorX, PhoneOff, Search, Settings, UserMinus, UserPlus, UserX, Users, Video, VideoOff, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronUp, Copy, Maximize2, Mic, MicOff, Minimize2, MonitorUp, MonitorX, PhoneOff, RotateCw, Search, Settings, UserMinus, UserPlus, UserX, Users, Video, VideoOff, X } from "lucide-react";
 import Link from "next/link";
 import { ApiError, apiClient } from "@/lib/api-client";
 import type { CaptionLanguage, LiveCaption, ParticipantDirectoryEntry, StageInvitation, ZoomJoinResponse, ZoomSession } from "@/lib/api-types";
@@ -20,6 +20,8 @@ type ZoomPresenceResponse = { token: string; expires_in: number };
 
 const PARTICIPANTS_PER_PAGE = 9;
 const SHARE_PARTICIPANTS_PER_PAGE = 6;
+const TABLET_PARTICIPANTS_PER_PAGE = 6;
+const MOBILE_PARTICIPANTS_PER_PAGE = 4;
 
 function participantIdentity(participant: ZoomParticipant) {
   return String(participant.userKey ?? participant.userIdentity ?? "");
@@ -122,6 +124,17 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
   const [linkCopied, setLinkCopied] = useState(false);
   const [virtualBackgroundSupported, setVirtualBackgroundSupported] = useState(false);
   const [noiseSuppressionSupported, setNoiseSuppressionSupported] = useState(false);
+  const [viewportMode, setViewportMode] = useState<"desktop" | "tablet" | "mobile">("desktop");
+
+  useEffect(() => {
+    const updateViewportMode = () => {
+      const width = window.innerWidth;
+      setViewportMode(width <= 640 ? "mobile" : width <= 960 ? "tablet" : "desktop");
+    };
+    updateViewportMode();
+    window.addEventListener("resize", updateViewportMode);
+    return () => window.removeEventListener("resize", updateViewportMode);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -156,7 +169,11 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
     });
   }, [deviceMenu]);
 
-  const participantPageSize = focus === "share" ? SHARE_PARTICIPANTS_PER_PAGE : PARTICIPANTS_PER_PAGE;
+  const participantPageSize = viewportMode === "mobile"
+    ? MOBILE_PARTICIPANTS_PER_PAGE
+    : viewportMode === "tablet"
+      ? TABLET_PARTICIPANTS_PER_PAGE
+      : focus === "share" ? SHARE_PARTICIPANTS_PER_PAGE : PARTICIPANTS_PER_PAGE;
 
   useEffect(() => {
     const pageCount = Math.max(1, Math.ceil(participants.length / participantPageSize));
@@ -915,6 +932,25 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
     showMediaFeedback("Câmera alterada", true);
   }
 
+  async function flipCamera() {
+    if (videoDevices.length < 2) {
+      showMediaFeedback("Não há outra câmera disponível", false);
+      return;
+    }
+    const currentIndex = videoDevices.findIndex((device) => device.deviceId === mediaPreferences.videoDeviceId);
+    const currentLabel = currentIndex >= 0 ? videoDevices[currentIndex].label.toLowerCase() : "";
+    const pointsToRear = /(back|rear|environment|traseira|posterior)/i.test(currentLabel);
+    const opposite = videoDevices.find((device) => {
+      const isRear = /(back|rear|environment|traseira|posterior)/i.test(device.label);
+      return pointsToRear ? !isRear : isRear;
+    });
+    const nextDevice = opposite?.deviceId !== mediaPreferences.videoDeviceId
+      ? opposite
+      : videoDevices[(currentIndex + 1 + videoDevices.length) % videoDevices.length];
+    if (!nextDevice) return;
+    await changeVideoDevice(nextDevice.deviceId);
+  }
+
   async function toggleNoiseSuppression() {
     const stream = streamRef.current;
     if (!stream || !noiseSuppressionSupported) {
@@ -1307,6 +1343,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
           {deviceMenu === "video" && <div className="zoom-media-menu" role="dialog" aria-label="Opções da câmera">
             <strong>Câmera</strong>
             <select value={mediaPreferences.videoDeviceId} onChange={(event) => void changeVideoDevice(event.target.value)}><option value="">Câmera padrão</option>{videoDevices.map((device, index) => <option value={device.deviceId} key={device.deviceId}>{device.label || `Câmera ${index + 1}`}</option>)}</select>
+            <button type="button" className="zoom-flip-camera" onClick={() => void flipCamera()} disabled={!videoOn || videoDevices.length < 2}><RotateCw size={15} /><span>Inverter câmera</span></button>
             <span className="zoom-menu-label">Fundo</span>
             <div className="zoom-background-options"><button type="button" className={mediaPreferences.virtualBackgroundMode === "none" ? "selected" : ""} disabled={!virtualBackgroundSupported} onClick={() => void changeVirtualBackground("none")}>Sem efeito</button><button type="button" className={mediaPreferences.virtualBackgroundMode === "blur" ? "selected" : ""} disabled={!virtualBackgroundSupported} onClick={() => void changeVirtualBackground("blur")}>Desfocar</button></div>
           </div>}
