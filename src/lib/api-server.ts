@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import type { EventData, Organization, Paginated, Recording, Room, Session } from "./api-types";
+import type { EventData, Organization, Paginated, Recording, Room, Session, Speaker } from "./api-types";
 
 const API_URL = process.env.BREVENTS_API_URL ?? "http://127.0.0.1:8000/api";
 
@@ -17,16 +17,18 @@ export async function getPublicEvent(slug: string): Promise<EventData | null> {
     const event = managed.results.find((item) => item.slug === slug);
     if (!event || event.status === "ended" || event.status === "archived") return null;
 
-    const [roomResponse, sessionResponse, recordingResponse] = await Promise.all([
+    const [roomResponse, sessionResponse, recordingResponse, speakerResponse] = await Promise.all([
       fetch(`${API_URL}/rooms/?event=${event.id}`, { headers, cache: "no-store" }),
       fetch(`${API_URL}/sessions/?event=${event.id}`, { headers, cache: "no-store" }),
       fetch(`${API_URL}/recordings/?event=${event.id}`, { headers, cache: "no-store" }),
+      fetch(`${API_URL}/speakers/?event=${event.id}`, { headers, cache: "no-store" }),
     ]);
-    if (!roomResponse.ok || !sessionResponse.ok || !recordingResponse.ok) return null;
+    if (!roomResponse.ok || !sessionResponse.ok || !recordingResponse.ok || !speakerResponse.ok) return null;
     const rooms = (await roomResponse.json()) as Paginated<Room>;
     const sessions = (await sessionResponse.json()) as Paginated<Session>;
     const recordings = (await recordingResponse.json()) as Paginated<Recording>;
-    return { ...event, rooms: rooms.results, sessions: sessions.results, recordings: recordings.results };
+    const speakers = (await speakerResponse.json()) as Paginated<Speaker>;
+    return { ...event, rooms: rooms.results.filter((room) => room.event === event.id), sessions: sessions.results, recordings: recordings.results, speakers: speakers.results.filter((speaker) => speaker.event === event.id).map(({ id, name, bio, avatar_url }) => ({ id, name, bio, avatar_url })) };
   } catch {
     return null;
   }

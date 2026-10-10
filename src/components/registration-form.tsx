@@ -2,12 +2,14 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { CheckCircle2, LoaderCircle } from "lucide-react";
 import { apiClient, readError } from "@/lib/api-client";
 import type { Registration, User } from "@/lib/api-types";
 import { useSession } from "./session-provider";
 
 export function RegistrationForm({ eventId, eventSlug, accessMode }: { eventId: string; eventSlug: string; accessMode: "public" | "registration" | "invite" }) {
+  const router = useRouter();
   const { user, setUser } = useSession();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -26,6 +28,7 @@ export function RegistrationForm({ eventId, eventSlug, accessMode }: { eventId: 
         const result = await response.json();
         if (!response.ok) throw new Error(readError(result));
         setRegistration(result as Registration);
+        router.replace(`/eventos/${eventSlug}/lobby`);
         return;
       }
       let activeUser = user;
@@ -37,11 +40,12 @@ export function RegistrationForm({ eventId, eventSlug, accessMode }: { eventId: 
       }
       const created = await apiClient<Registration>("registrations/", { method: "POST", body: { event: eventId, name: activeUser.name || data.name, email: activeUser.email || data.email, profile: { company: data.company, role: data.role }, consent_at: new Date().toISOString() } });
       setRegistration(created);
+      router.replace(`/eventos/${eventSlug}/lobby`);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Não foi possível concluir sua inscrição."); }
     finally { setLoading(false); }
   }
 
-  if (registration) return <div className="success-panel"><CheckCircle2 size={42} /><p className="eyebrow">Inscrição confirmada</p><h2>Você está dentro.</h2><p>{user ? "Seu ingresso está associado à sua conta." : "Seu ingresso foi salvo neste navegador. Você já pode assistir sem criar uma conta."}</p><div className="inline-actions"><Link className="button button-primary" href={`/eventos/${eventSlug}/ao-vivo`}>Entrar no evento</Link>{!user && <Link className="button button-secondary" href={`/criar-conta?next=/eventos/${eventSlug}/ao-vivo`}>Criar conta para interagir</Link>}</div></div>;
+  if (registration) return <div className="success-panel"><CheckCircle2 size={42} /><p className="eyebrow">Inscrição confirmada</p><h2>Você está dentro.</h2><p>{user ? "Seu ingresso está associado à sua conta." : "Seu ingresso foi salvo neste navegador. Você já pode assistir sem criar uma conta."}</p><div className="inline-actions"><Link className="button button-primary" href={`/eventos/${eventSlug}/lobby`}>Entrar no evento</Link>{!user && <Link className="button button-secondary" href={`/criar-conta?next=/eventos/${eventSlug}/lobby`}>Criar conta para interagir</Link>}</div></div>;
 
   return <form className="registration-form" onSubmit={submit}>
     <div className="form-grid">

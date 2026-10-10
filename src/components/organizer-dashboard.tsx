@@ -1,115 +1,154 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Activity, ArrowRight, BarChart3, CalendarRange, Check as CheckIcon, CheckCircle2, CircleStop, CircleUserRound, Cog, Film, LayoutDashboard, LogOut, MessageSquareText, Plus, Radio, RotateCcw, Settings, Users, Video } from "lucide-react";
+import { BarChart3, CalendarDays, Check, ChevronDown, ExternalLink, Film, LayoutDashboard, LogOut, MessageSquare, Plus, Radio, RefreshCw, Settings, Users } from "lucide-react";
 import { Brand } from "./brand";
 import { useSession } from "./session-provider";
 import { apiClient } from "@/lib/api-client";
-import type { Analytics, EventData, Paginated, Poll, Question, Recording, Registration, Room, Session, Speaker, User } from "@/lib/api-types";
+import type { Analytics, EventData, Registration, Room, Session, Speaker } from "@/lib/api-types";
+import { AgendaPanel } from "./event-dashboard/agenda-panel";
+import { InteractionsPanel } from "./event-dashboard/interactions-panel";
+import { AnalyticsPanel } from "./event-dashboard/analytics-panel";
+import { ParticipantsPanel, SettingsPanel, TransmissionPanel } from "./event-dashboard/management-panels";
+import { dateTime, duration, Empty, listAll, mainRoom, Metric, type DashboardAction } from "./event-dashboard/shared";
+import styles from "./event-dashboard/dashboard.module.css";
 
-type Tab = "overview" | "events" | "agenda" | "participants" | "stream" | "interactions" | "recordings" | "analytics" | "settings";
-
-const nav: Array<{ id: Tab; label: string; icon: typeof Activity }> = [
-  { id: "overview", label: "Visão geral", icon: LayoutDashboard }, { id: "events", label: "Eventos", icon: CalendarRange },
-  { id: "agenda", label: "Programação", icon: Activity },
+type Tab = "overview" | "agenda" | "stream" | "participants" | "interactions" | "analytics" | "settings";
+const navigation = [
+  { id: "overview", label: "Visão geral", icon: LayoutDashboard },
+  { id: "agenda", label: "Programação", icon: CalendarDays },
+  { id: "stream", label: "Auditório e rodadas", icon: Radio },
   { id: "participants", label: "Participantes", icon: Users },
-  { id: "stream", label: "Transmissão", icon: Video }, { id: "interactions", label: "Interações", icon: MessageSquareText },
-  { id: "recordings", label: "Gravações", icon: Film }, { id: "analytics", label: "Analytics", icon: BarChart3 },
+  { id: "interactions", label: "Interações", icon: MessageSquare },
+  { id: "analytics", label: "Resultados", icon: BarChart3 },
   { id: "settings", label: "Configurações", icon: Settings },
-];
-
-const navGroups: Array<{ label: string; items: Tab[] }> = [
-  { label: "Painel", items: ["overview", "events"] },
-  { label: "Produção", items: ["agenda", "stream", "recordings"] },
-  { label: "Público", items: ["participants", "interactions", "analytics"] },
-];
+] as const;
+const descriptions: Record<Tab, string> = {
+  overview: "Prepare e acompanhe seu evento em um só lugar.", agenda: "Organize as palestras, os horários e quem vai apresentar.",
+  stream: "O palco principal e as conversas de negócios deste evento.", participants: "Inscrições, informações profissionais e controle de acesso.",
+  interactions: "Crie enquetes e organize as perguntas do público.", analytics: "Audiência, participação e conexões geradas pelo evento.",
+  settings: "Informações públicas, inscrições e disponibilidade do evento.",
+};
 
 export function OrganizerDashboard({ initialEventId, initialTab = "overview" }: { initialEventId?: string; initialTab?: Tab }) {
   const router = useRouter();
-  const { user: sessionUser } = useSession();
-  const [user, setUser] = useState<User | null>(null); const [events, setEvents] = useState<EventData[]>([]);
-  const [activeId, setActiveId] = useState(initialEventId ?? ""); const [tab, setTab] = useState<Tab>(initialTab);
-  const [rooms, setRooms] = useState<Room[]>([]); const [speakers, setSpeakers] = useState<Speaker[]>([]); const [sessions, setSessions] = useState<Session[]>([]);
-  const [registrations, setRegistrations] = useState<Registration[]>([]); const [recordings, setRecordings] = useState<Recording[]>([]);
-  const [questions, setQuestions] = useState<Question[]>([]); const [polls, setPolls] = useState<Poll[]>([]); const [analytics, setAnalytics] = useState<Analytics | null>(null);
-  const [loading, setLoading] = useState(true); const [error, setError] = useState(""); const [notice, setNotice] = useState("");
-  const activeEvent = useMemo(() => events.find((item) => item.id === activeId) ?? null, [events, activeId]);
+  const { user } = useSession();
+  const [events, setEvents] = useState<EventData[]>([]);
+  const [activeId, setActiveId] = useState("");
+  const [tab, setTab] = useState<Tab>(initialTab);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [speakers, setSpeakers] = useState<Speaker[]>([]);
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [registrations, setRegistrations] = useState<Registration[]>([]);
+  const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const generation = useRef(0);
+  const activeEvent = events.find((item) => item.id === activeId);
 
-  const loadResources = useCallback(async (eventId: string) => {
-    const [roomData, speakerData, sessionData, registrationData, recordingData, analyticsData] = await Promise.all([
-      apiClient<Paginated<Room>>(`rooms/?event=${eventId}`), apiClient<Paginated<Speaker>>(`speakers/?event=${eventId}`),
-      apiClient<Paginated<Session>>(`sessions/?event=${eventId}`), apiClient<Paginated<Registration>>(`registrations/?event=${eventId}`),
-      apiClient<Paginated<Recording>>(`recordings/?event=${eventId}`), apiClient<Analytics>(`events/${eventId}/analytics/`),
+  useEffect(() => {
+    let cancelled = false;
+    if (!user) { router.replace("/entrar?next=/painel"); return; }
+    if (user.account_type !== "organizer" && !user.is_staff) { router.replace("/"); return; }
+    listAll<EventData>("events/?managed=true").then((items) => {
+      if (cancelled) return;
+      const webEvents = items.filter((item) => item.public_config.product_type !== "meeting");
+      setEvents(webEvents);
+      setActiveId(webEvents.some((item) => item.id === initialEventId) ? initialEventId! : webEvents[0]?.id ?? "");
+      if (!webEvents.length) setLoading(false);
+    }).catch((reason: unknown) => { if (!cancelled) { setError(reason instanceof Error ? reason.message : "Não foi possível carregar os eventos."); setLoading(false); } });
+    return () => { cancelled = true; };
+  }, [initialEventId, router, user]);
+
+  const load = useCallback(async (eventId: string) => {
+    const current = ++generation.current;
+    const [roomData, speakerData, sessionData, registrationData, metrics] = await Promise.all([
+      listAll<Room>(`rooms/?event=${eventId}`), listAll<Speaker>(`speakers/?event=${eventId}`),
+      listAll<Session>(`sessions/?event=${eventId}`), listAll<Registration>(`registrations/?event=${eventId}`),
+      apiClient<Analytics>(`events/${eventId}/analytics/`),
     ]);
-    setRooms(roomData.results); setSpeakers(speakerData.results); setSessions(sessionData.results); setRegistrations(registrationData.results); setRecordings(recordingData.results); setAnalytics(analyticsData);
-    if (roomData.results[0]) {
-      const [questionData, pollData] = await Promise.all([apiClient<Paginated<Question>>(`questions/?room=${roomData.results[0].id}`), apiClient<Paginated<Poll>>(`polls/?room=${roomData.results[0].id}`)]);
-      setQuestions(questionData.results); setPolls(pollData.results);
-    } else { setQuestions([]); setPolls([]); }
+    if (current !== generation.current) return;
+    setRooms(roomData); setSpeakers(speakerData); setSessions(sessionData); setRegistrations(registrationData); setAnalytics(metrics);
   }, []);
 
   useEffect(() => {
-    async function load() {
-      try {
-        if (!sessionUser) { router.push("/entrar?next=/painel"); return; }
-        if (sessionUser.account_type !== "organizer" && !sessionUser.is_staff) { router.push("/"); return; }
-        setUser(sessionUser);
-        const eventData = await apiClient<Paginated<EventData>>("events/?managed=true"); const webEvents = eventData.results.filter(isWebEvent); setEvents(webEvents);
-        const selected = initialEventId && webEvents.some((item) => item.id === initialEventId) ? initialEventId : webEvents[0]?.id;
-        if (selected) { setActiveId(selected); await loadResources(selected); }
-      } catch (reason) { setError(reason instanceof Error ? reason.message : "Não foi possível carregar o painel."); }
-      finally { setLoading(false); }
-    }
-    load();
-  }, [initialEventId, loadResources, router, sessionUser]);
+    if (!activeId) return;
+    let cancelled = false;
+    load(activeId).catch((reason: unknown) => { if (!cancelled) setError(reason instanceof Error ? reason.message : "Não foi possível carregar o evento."); }).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; generation.current += 1; };
+  }, [activeId, load]);
 
-  async function reload(message?: string) { if (!activeId) return; await loadResources(activeId); if (message) { setNotice(message); window.setTimeout(() => setNotice(""), 3500); } }
+  useEffect(() => {
+    if (!activeId || (tab !== "overview" && tab !== "analytics")) return;
+    let cancelled = false;
+    const timer = window.setInterval(() => {
+      apiClient<Analytics>(`events/${activeId}/analytics/`).then((data) => { if (!cancelled) setAnalytics(data); }).catch(() => undefined);
+    }, 30_000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [activeId, tab]);
+
+  const action: DashboardAction = async (operation, message, onError) => {
+    if (busy) return false;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      await operation();
+      const items = await listAll<EventData>("events/?managed=true");
+      setEvents(items.filter((item) => item.public_config.product_type !== "meeting"));
+      await load(activeId); setNotice(message); return true;
+    } catch (reason) { if (onError) onError(reason); else setError(reason instanceof Error ? reason.message : "Não foi possível salvar."); return false; }
+    finally { setBusy(false); }
+  };
   async function logout() { await fetch("/api/auth/logout", { method: "POST" }); router.push("/entrar"); router.refresh(); }
-  async function createSpeaker(formEvent: FormEvent<HTMLFormElement>) { formEvent.preventDefault(); const form = formEvent.currentTarget; const data = Object.fromEntries(new FormData(form)); setError(""); try { await apiClient("speakers/", { method: "POST", body: { event: activeId, name: String(data.name).trim(), email: String(data.email || "").trim(), bio: String(data.bio || "").trim() } }); form.reset(); await reload("Palestrante adicionado."); } catch (reason) { setError(reason instanceof Error ? reason.message : "Não foi possível adicionar o palestrante."); } }
-  async function createSession(formEvent: FormEvent<HTMLFormElement>) { formEvent.preventDefault(); const data = Object.fromEntries(new FormData(formEvent.currentTarget)); await apiClient("sessions/", { method: "POST", body: { event: activeId, room: data.room || null, speakers: data.speaker ? [data.speaker] : [], title: data.title, slug: slugify(String(data.title)), description: data.description, starts_at: new Date(String(data.starts_at)).toISOString(), ends_at: new Date(String(data.ends_at)).toISOString(), status: "published", track: data.track, tags: [] } }); formEvent.currentTarget.reset(); await reload("Sessão publicada na agenda."); }
-  async function createRoom(formEvent: FormEvent<HTMLFormElement>) { formEvent.preventDefault(); const data = Object.fromEntries(new FormData(formEvent.currentTarget)); const provider = String(data.provider); const config = provider === "call.zoom" ? { session_name: String(data.stream), passcode: String(data.passcode ?? "") } : provider === "livestream.youtube" ? { video_id: data.stream } : { url: data.stream }; await apiClient("rooms/", { method: "POST", body: { event: activeId, name: data.name, description: data.description, mode: data.mode, position: rooms.length, module_config: [{ type: provider, config }, { type: "chat.native", config: { volatile: false } }, { type: "question", config: { active: true, requires_moderation: true } }, { type: "poll", config: { active: true } }] } }); formEvent.currentTarget.reset(); await reload(provider === "call.zoom" ? "Sala Zoom criada e pronta para receber credenciais." : "Sala e canal de chat criados."); }
-  async function createRecording(formEvent: FormEvent<HTMLFormElement>) { formEvent.preventDefault(); const data = Object.fromEntries(new FormData(formEvent.currentTarget)); await apiClient("recordings/", { method: "POST", body: { event: activeId, room: data.room || null, session: data.session || null, title: data.title, provider: data.provider, playback_url: data.playback_url, status: "available", published_at: new Date().toISOString() } }); formEvent.currentTarget.reset(); await reload("Gravação publicada."); }
-  async function createPoll(formEvent: FormEvent<HTMLFormElement>) { formEvent.preventDefault(); const data = Object.fromEntries(new FormData(formEvent.currentTarget)); const created = await apiClient<Poll>("polls/", { method: "POST", body: { room: data.room, question: data.question, state: "draft", show_results_before_close: true, options: String(data.options).split("\n").filter(Boolean).map((text) => ({ text })) } }); await apiClient(`polls/${created.id}/transition/`, { method: "POST", body: { state: "open" } }); formEvent.currentTarget.reset(); await reload("Enquete criada e aberta."); }
-  async function updateRegistration(item: Registration, status: Registration["status"]) { await apiClient(`registrations/${item.id}/`, { method: "PATCH", body: { status } }); await reload("Status da inscrição atualizado."); }
-  async function moderateQuestion(item: Question, state: string) { await apiClient(`questions/${item.id}/moderate/`, { method: "POST", body: { state } }); await reload("Pergunta moderada."); }
-  async function publish() { await apiClient(`events/${activeId}/publish/`, { method: "POST" }); const updated = await apiClient<Paginated<EventData>>("events/?managed=true"); setEvents(updated.results.filter(isWebEvent)); setNotice("Evento publicado."); }
-  async function endEvent() { const ended = await apiClient<EventData>(`events/${activeId}/end/`, { method: "POST" }); setEvents((current) => current.map((event) => event.id === ended.id ? ended : event)); setNotice("Evento encerrado. A página pública e a sala ao vivo estão inacessíveis."); }
-  async function reopenEvent() { const reopened = await apiClient<EventData>(`events/${activeId}/reopen/`, { method: "POST" }); setEvents((current) => current.map((event) => event.id === reopened.id ? reopened : event)); setNotice("Evento reaberto e disponível para o público."); }
-  async function saveSettings(formEvent: FormEvent<HTMLFormElement>) { formEvent.preventDefault(); const data = Object.fromEntries(new FormData(formEvent.currentTarget)); await apiClient(`events/${activeId}/`, { method: "PATCH", body: { name: data.name, description: data.description, registration_open: data.registration_open === "on", access_mode: data.access_mode, public_config: { ...(activeEvent?.public_config ?? {}), subtitle: data.subtitle } } }); const updated = await apiClient<Paginated<EventData>>("events/?managed=true"); setEvents(updated.results.filter(isWebEvent)); setNotice("Configurações salvas."); }
 
-  if (loading) return <main className="dashboard-loading"><span className="live-dot" /><p>Preparando seu painel…</p></main>;
-  return <main className="dashboard"><aside className="dashboard-sidebar"><Brand href="/" /><nav className="dashboard-nav" aria-label="Navegação do painel">{navGroups.map((group) => <section className="dashboard-nav-group" key={group.label} aria-label={group.label}><span className="dashboard-nav-label">{group.label}</span>{group.items.map((id) => { const item = nav.find((entry) => entry.id === id); if (!item) return null; return <button className={tab === id ? "active" : ""} key={id} onClick={() => setTab(id)} title={item.label}><span className="dashboard-nav-dot" /><span>{item.label}</span></button>; })}</section>)}</nav><div className="dashboard-sidebar-footer"><button className={tab === "settings" ? "dashboard-settings active" : "dashboard-settings"} onClick={() => setTab("settings")}><span className="dashboard-nav-dot" /><span>Configurações</span></button><div className="dashboard-user"><span className="avatar">{user?.first_name?.slice(0, 1) || "U"}</span><div><strong>{user?.name || user?.username}</strong><span className="dashboard-user-role">Organizador</span></div><button className="sidebar-logout" onClick={logout} aria-label="Sair"><LogOut size={16} /></button></div></div></aside><section className="dashboard-main">
-    <header className="dashboard-topbar"><div><h1>{tabTitle(tab)}</h1><p className="dashboard-event-context">{activeEvent ? activeEvent.name : "Crie seu primeiro evento para começar."}</p></div><div className="inline-actions">{events.length > 0 && <label className="event-switcher"><span className="sr-only">Evento atual</span><select value={activeId} onChange={async (event) => { setActiveId(event.target.value); await loadResources(event.target.value); }}>{events.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>}<Link className="button button-primary" href="/painel/eventos/novo"><Plus size={16} /> Novo evento</Link></div></header>
-    {error && <p className="form-error">{error}</p>}{notice && <p className="form-success"><CheckCircle2 size={15} /> {notice}</p>}
-    {!activeEvent && <EmptyEvents />}
-    {activeEvent && tab === "overview" && <Overview event={activeEvent} analytics={analytics} sessions={sessions} recordings={recordings} rooms={rooms} onNavigate={setTab} onPublish={publish} />}
-    {tab === "events" && <EventsPanel events={events} activeId={activeId} onSelect={async (id) => { setActiveId(id); setTab("overview"); await loadResources(id); }} />}
-    {activeEvent && tab === "agenda" && <AgendaPanel rooms={rooms} speakers={speakers} sessions={sessions} createSpeaker={createSpeaker} createSession={createSession} />}
-    {activeEvent && tab === "participants" && <ParticipantsPanel items={registrations} update={updateRegistration} />}
-    {activeEvent && tab === "stream" && <StreamPanel rooms={rooms} createRoom={createRoom} />}
-    {activeEvent && tab === "interactions" && <InteractionsPanel rooms={rooms} questions={questions} polls={polls} createPoll={createPoll} moderate={moderateQuestion} />}
-    {activeEvent && tab === "recordings" && <RecordingsPanel rooms={rooms} sessions={sessions} recordings={recordings} create={createRecording} />}
-    {activeEvent && tab === "analytics" && <AnalyticsPanel data={analytics} />}
-    {activeEvent && tab === "settings" && <SettingsPanel event={activeEvent} save={saveSettings} publish={publish} endEvent={endEvent} reopenEvent={reopenEvent} />}
-  </section></main>;
+  return <main className={styles.workspace}>
+    <aside className={styles.sidebar}><Brand href="/" /><small className={styles.navCaption}>GESTÃO DO EVENTO</small>
+      <nav aria-label="Painel do evento">
+        {navigation.filter((item) => item.id !== "settings").map(({ id, label, icon: Icon }) => <button key={id} type="button" aria-current={tab === id ? "page" : undefined} className={tab === id ? styles.navActive : ""} onClick={() => setTab(id)}><Icon size={18} /><span>{label}</span></button>)}
+        <span className={styles.comingSoon} tabIndex={0} aria-label="Gravações: em breve"><button type="button" disabled><Film size={18} /><span>Gravações</span></button><span className={styles.tooltip} role="tooltip">Em breve: gravações do evento</span></span>
+      </nav>
+      <footer><button type="button" className={tab === "settings" ? styles.navActive : ""} onClick={() => setTab("settings")}><Settings size={18} /> Configurações</button><div className={styles.account}><span>{user?.first_name?.[0] || "O"}</span><div><strong>{user?.name || user?.username}</strong><small>Organizador</small></div><button type="button" aria-label="Sair da conta" onClick={logout}><LogOut size={18} /></button></div></footer>
+    </aside>
+    <section className={styles.main}>
+      <header className={styles.topbar}><div><span className={styles.kicker}>PAINEL DO ORGANIZADOR</span><h1>{navigation.find((item) => item.id === tab)?.label}</h1><p>{descriptions[tab]}</p></div><div className={styles.headerActions}>
+        {events.length > 0 && <label className={styles.eventSelector}><CalendarDays size={20} /><span><small>Evento selecionado</small><select aria-label="Evento selecionado" value={activeId} disabled={busy} onChange={(event) => { setLoading(true); setError(""); setNotice(""); setRooms([]); setAnalytics(null); setActiveId(event.target.value); }}>{events.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></span><ChevronDown size={16} /></label>}
+        <Link className={styles.primary} href="/painel/eventos/novo"><Plus size={17} /> Novo evento</Link>
+      </div></header>
+      {(error || notice) && <div className={error ? styles.error : styles.success} role={error ? "alert" : "status"}>{error || notice}<button type="button" onClick={() => { setError(""); setNotice(""); }} aria-label="Fechar mensagem">×</button></div>}
+      <div className={styles.content} aria-busy={loading || busy}>
+        {loading ? <Empty>Carregando informações do evento…</Empty> : !activeEvent ? <Empty><h2>Vamos criar seu primeiro evento?</h2><p>Configure as informações principais e receba um auditório pronto para testes.</p><Link className={styles.primary} href="/painel/eventos/novo">Criar evento</Link></Empty> : <div key={activeId}>
+          {tab === "overview" && <Overview event={activeEvent} analytics={analytics} rooms={rooms} onNavigate={setTab} />}
+          {tab === "agenda" && <AgendaPanel event={activeEvent} rooms={rooms} sessions={sessions} speakers={speakers} action={action} busy={busy} />}
+          {tab === "stream" && <TransmissionPanel event={activeEvent} rooms={rooms} analytics={analytics} action={action} busy={busy} />}
+          {tab === "participants" && <ParticipantsPanel event={activeEvent} items={registrations} action={action} busy={busy} />}
+          {tab === "interactions" && <InteractionsPanel event={activeEvent} rooms={rooms} />}
+          {tab === "analytics" && <AnalyticsPanel event={activeEvent} data={analytics} />}
+          {tab === "settings" && <SettingsPanel event={activeEvent} action={action} busy={busy} />}
+        </div>}
+      </div>
+      <footer className={styles.statusbar}><span><i />{activeEvent?.name || "BR Events"}</span><button type="button" disabled={busy || loading || !activeId} onClick={() => void action(async () => undefined, "Dados atualizados.")}><RefreshCw size={13} /> Atualizar dados</button></footer>
+    </section>
+  </main>;
 }
 
-function Overview({ event, analytics, sessions, recordings, rooms, onNavigate, onPublish }: { event: EventData; analytics: Analytics | null; sessions: Session[]; recordings: Recording[]; rooms: Room[]; onNavigate: (tab: Tab) => void; onPublish: () => Promise<void> }) { const published = event.status === "published"; const ended = event.status === "ended" || event.status === "archived"; const hasZoom = rooms.some((room) => room.zoom_session); const steps = [{ label: "Evento criado", done: true }, { label: "Agenda publicada", done: sessions.length > 0 }, { label: "Inscrições abertas", done: event.registration_open }, { label: "Sala Zoom configurada", done: hasZoom }, { label: "Conteúdo on-demand", done: recordings.length > 0 }, { label: "Evento publicado", done: published || ended }]; const completed = steps.filter((step) => step.done).length; const stats = [{ label: "Inscritos", value: analytics?.registrations ?? 0, live: published }, { label: "Pessoas únicas", value: analytics?.unique_viewers ?? 0 }, { label: "Mensagens", value: analytics?.chat_messages ?? 0 }, { label: "Sessões", value: sessions.length }]; return <>{ended && <div className="event-ended-banner" role="status"><CircleStop size={20} /><div><strong>Evento encerrado</strong><span>A página pública, as inscrições e a sala ao vivo estão inacessíveis.</span></div><button type="button" onClick={() => onNavigate("settings")}>Ver configurações</button></div>}<section className="stat-grid">{stats.map(({ label, value, live }) => <article className="stat-card" key={label}><div className="stat-card-label"><span>{live && <i className="dashboard-live-dot" />}{label}{live && <small> · ao vivo</small>}</span></div><strong>{value}</strong></article>)}</section><div className="dashboard-grid"><section className="dashboard-card dashboard-preparation"><div className="card-header"><h2>Preparação do evento</h2><span className="dashboard-progress-count">{completed}/6 pronto</span></div><div className="dashboard-progress-track" role="progressbar" aria-label="Preparação do evento" aria-valuemin={0} aria-valuemax={6} aria-valuenow={completed}><span style={{ width: `${(completed / 6) * 100}%` }} /></div><div className="checklist">{steps.map((step) => <Check label={step.label} done={step.done} key={step.label} />)}</div></section><section className="dashboard-card dashboard-quick-access"><div className="card-header"><h2>Acesso rápido</h2></div>{ended ? <div className="ended-access-message"><CircleStop size={28} /><strong>Acessos públicos desativados</strong><p>Reabra o evento nas configurações quando quiser disponibilizá-lo novamente.</p></div> : <div className="quick-links"><Link href={`/eventos/${event.slug}`} target="_blank">{published ? "Página pública" : "Pré-visualizar página"}<ArrowRight size={18} aria-hidden="true" /></Link><Link href={`/eventos/${event.slug}/ao-vivo`} target="_blank">{published ? "Sala ao vivo" : "Testar sala ao vivo"}<ArrowRight size={18} aria-hidden="true" /></Link>{recordings.length > 0 && <Link href={`/eventos/${event.slug}/gravacoes`} target="_blank">Gravações<ArrowRight size={18} aria-hidden="true" /></Link>}{!hasZoom && <button type="button" onClick={() => onNavigate("stream")}>Configurar transmissão Zoom<ArrowRight size={18} aria-hidden="true" /></button>}{!published && <button type="button" onClick={() => void onPublish()}>Publicar evento agora<ArrowRight size={18} aria-hidden="true" /></button>}</div>}</section></div></>; }
-function EventsPanel({ events, activeId, onSelect }: { events: EventData[]; activeId: string; onSelect: (id: string) => void }) { return <div className="admin-list">{events.map((event) => <article className={`admin-row${event.id === activeId ? " selected" : ""}`} key={event.id}><div><span className={`status-pill status-${event.status}`}>{eventStatusLabel(event.status)}</span><h2>{event.name}</h2><p>{new Date(event.starts_at).toLocaleString("pt-BR")}</p></div><button className="button button-secondary" onClick={() => onSelect(event.id)}>Gerenciar</button></article>)}</div>; }
-function AgendaPanel({ rooms, speakers, sessions, createSpeaker, createSession }: { rooms: Room[]; speakers: Speaker[]; sessions: Session[]; createSpeaker: (event: FormEvent<HTMLFormElement>) => void; createSession: (event: FormEvent<HTMLFormElement>) => void }) { return <div className="admin-columns"><div><AdminSection title="Nova sessão"><form className="compact-form" onSubmit={createSession}><input name="title" placeholder="Título da sessão" required /><textarea name="description" placeholder="Descrição" /><div className="form-grid"><input name="starts_at" type="datetime-local" required /><input name="ends_at" type="datetime-local" required /><select name="room" required><option value="">Sala</option>{rooms.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select><select name="speaker"><option value="">Palestrante</option>{speakers.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></div><input name="track" placeholder="Trilha" /><button className="button button-primary">Adicionar sessão</button></form></AdminSection><AdminSection title="Novo palestrante"><form className="compact-form" onSubmit={createSpeaker}><input name="name" placeholder="Nome" required /><input name="email" type="email" placeholder="E-mail" /><textarea name="bio" placeholder="Mini bio" /><button className="button button-secondary">Adicionar palestrante</button></form></AdminSection></div><AdminSection title={`Agenda · ${sessions.length} sessões`}><div className="admin-list compact">{sessions.map((item) => <article className="admin-row" key={item.id}><div><strong>{item.title}</strong><p>{new Date(item.starts_at).toLocaleString("pt-BR")} · {item.track}</p></div><span className="status-pill status-recorded">{item.status}</span></article>)}</div></AdminSection></div>; }
-function ParticipantsPanel({ items, update }: { items: Registration[]; update: (item: Registration, status: Registration["status"]) => void }) { return <AdminSection title={`${items.length} participantes`}><div className="data-table"><div className="data-row data-head"><span>Participante</span><span>E-mail</span><span>Inscrição</span><span>Status</span></div>{items.map((item) => <div className="data-row" key={item.id}><strong>{item.name}</strong><span>{item.email}</span><span>{new Date(item.created_at).toLocaleDateString("pt-BR")}</span><select value={item.status} onChange={(event) => update(item, event.target.value as Registration["status"])}><option value="confirmed">Confirmada</option><option value="pending">Pendente</option><option value="cancelled">Cancelada</option><option value="blocked">Bloqueada</option></select></div>)}</div></AdminSection>; }
-function StreamPanel({ rooms, createRoom }: { rooms: Room[]; createRoom: (event: FormEvent<HTMLFormElement>) => void }) { return <div className="admin-columns"><AdminSection title="Nova sala"><form className="compact-form" onSubmit={createRoom}><input name="name" placeholder="Nome da sala" required /><textarea name="description" placeholder="Descrição" /><select name="mode" defaultValue="event"><option value="event">Evento moderado · somente convidados sobem ao palco</option><option value="meeting">Reunião · todos podem usar áudio e vídeo</option></select><select name="provider" defaultValue="call.zoom"><option value="call.zoom">Zoom Video SDK · Live Meeting</option><option value="livestream.youtube">YouTube</option><option value="livestream.vimeo">Vimeo</option><option value="livestream.iframe">Iframe</option><option value="livestream.native">HLS nativo</option></select><input name="stream" placeholder="Nome único da sessão Zoom ou ID/URL" required /><input name="passcode" maxLength={10} placeholder="Senha Zoom (opcional)" /><p className="muted compact-help">No modo evento, participantes entram como espectadores e só usam mídia após convite. No modo reunião, todos colaboram.</p><button className="button button-primary">Criar sala</button></form></AdminSection><AdminSection title="Salas configuradas"><div className="admin-list compact">{rooms.map((room) => <article className="admin-row" key={room.id}><div><strong>{room.name}</strong><p>{room.zoom_session ? `Zoom · ${room.zoom_session.session_name} · ${room.mode === "meeting" ? "reunião" : "evento"}` : room.description}</p></div><span className={`status-pill ${room.zoom_session?.configured === false ? "status-soon" : "status-recorded"}`}><Radio size={12} /> {room.zoom_session?.configured === false ? "credenciais" : "pronta"}</span></article>)}</div></AdminSection></div>; }
-function InteractionsPanel({ rooms, questions, polls, createPoll, moderate }: { rooms: Room[]; questions: Question[]; polls: Poll[]; createPoll: (event: FormEvent<HTMLFormElement>) => void; moderate: (item: Question, state: string) => void }) { return <div className="admin-columns"><div><AdminSection title="Nova enquete"><form className="compact-form" onSubmit={createPoll}><select name="room" required>{rooms.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select><input name="question" placeholder="Pergunta" required /><textarea name="options" placeholder={'Uma opção por linha\nOpção A\nOpção B'} required /><button className="button button-primary">Criar e abrir</button></form></AdminSection><AdminSection title="Enquetes"><div className="admin-list compact">{polls.map((item) => <article className="admin-row" key={item.id}><strong>{item.question}</strong><span className="status-pill status-recorded">{item.state}</span></article>)}</div></AdminSection></div><AdminSection title="Moderação de perguntas"><div className="admin-list compact">{questions.map((item) => <article className="admin-row admin-question" key={item.id}><div><strong>{item.content}</strong><p>{item.score} votos · {item.state}</p></div><div className="inline-actions"><button className="button button-quiet" onClick={() => moderate(item, "visible")}>Aprovar</button><button className="button button-quiet" onClick={() => moderate(item, "archived")}>Arquivar</button></div></article>)}</div></AdminSection></div>; }
-function RecordingsPanel({ rooms, sessions, recordings, create }: { rooms: Room[]; sessions: Session[]; recordings: Recording[]; create: (event: FormEvent<HTMLFormElement>) => void }) { return <div className="admin-columns"><AdminSection title="Publicar gravação"><form className="compact-form" onSubmit={create}><input name="title" placeholder="Título" required /><select name="room"><option value="">Sala</option>{rooms.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select><select name="session"><option value="">Sessão relacionada</option>{sessions.map((item) => <option value={item.id} key={item.id}>{item.title}</option>)}</select><select name="provider"><option value="youtube">YouTube</option><option value="vimeo">Vimeo</option><option value="external">Externo</option></select><input name="playback_url" type="url" placeholder="URL para assistir" required /><button className="button button-primary">Publicar gravação</button></form></AdminSection><AdminSection title="Catálogo on-demand"><div className="admin-list compact">{recordings.map((item) => <article className="admin-row" key={item.id}><div><strong>{item.title}</strong><p>{item.provider}</p></div><span className="status-pill status-recorded">{item.status}</span></article>)}</div></AdminSection></div>; }
-function AnalyticsPanel({ data }: { data: Analytics | null }) { if (!data) return <p className="muted">Analytics ainda indisponíveis.</p>; const max = Math.max(1, ...data.rooms.map((item) => item.visits)); return <><section className="stat-grid"><Stat label="Inscrições" value={data.registrations} /><Stat label="Confirmadas" value={data.confirmed_registrations} /><Stat label="Visitantes únicos" value={data.unique_viewers} /><Stat label="Visitas" value={data.total_visits} /></section><AdminSection title="Audiência por sala"><div className="analytics-bars">{data.rooms.map((room) => <div key={room.room_id}><div className="progress-row-top"><span>{room.room_name}</span><strong>{room.visits} visitas</strong></div><div className="progress-track"><div className="progress-fill" style={{ width: `${(room.visits / max) * 100}%` }} /></div><small>{room.chat_messages} mensagens · {room.questions} perguntas</small></div>)}</div></AdminSection></>; }
-function SettingsPanel({ event, save, publish, endEvent, reopenEvent }: { event: EventData; save: (e: FormEvent<HTMLFormElement>) => void; publish: () => void; endEvent: () => Promise<void>; reopenEvent: () => Promise<void> }) { const [confirmingEnd, setConfirmingEnd] = useState(false); const ended = event.status === "ended" || event.status === "archived"; return <div className="admin-columns"><AdminSection title="Configuração geral"><form className="compact-form" onSubmit={save}><label className="field"><span>Nome</span><input name="name" defaultValue={event.name} required /></label><label className="field"><span>Chamada principal</span><input name="subtitle" defaultValue={String(event.public_config.subtitle ?? "")} /></label><label className="field"><span>Descrição</span><textarea name="description" defaultValue={event.description} /></label><label className="field"><span>Acesso</span><select name="access_mode" defaultValue={event.access_mode}><option value="registration">Inscrição</option><option value="public">Público</option><option value="invite">Convidados</option></select></label><label className="check-field"><input name="registration_open" type="checkbox" defaultChecked={event.registration_open} /> Inscrições abertas</label><button className="button button-primary">Salvar alterações</button></form></AdminSection><div className="settings-status-column"><AdminSection title="Disponibilidade"><div className={`publish-card event-lifecycle-card${ended ? " ended" : ""}`}>{ended ? <CircleStop size={28} /> : <Cog size={28} />}<span className={`status-pill status-${event.status}`}>{eventStatusLabel(event.status)}</span><h3>{ended ? "Evento encerrado" : event.status === "published" ? "Evento disponível" : "Pronto para publicar?"}</h3><p className="muted">{ended ? "A página pública, as inscrições e a sala ao vivo estão bloqueadas." : "A publicação libera a página pública e as inscrições."}</p>{ended ? <button className="button button-secondary" type="button" onClick={() => void reopenEvent()}><RotateCcw size={16} /> Reabrir evento</button> : event.status !== "published" ? <button className="button button-secondary" type="button" onClick={publish}>Publicar evento</button> : null}</div></AdminSection>{event.status === "published" && <AdminSection title="Encerrar evento">{confirmingEnd ? <div className="event-end-confirmation" role="alert"><strong>Tem certeza?</strong><p>Participantes perderão o acesso à página, às inscrições e à sala ao vivo.</p><div className="inline-actions"><button className="button button-danger" type="button" onClick={() => void endEvent()}>Sim, encerrar evento</button><button className="button button-secondary" type="button" onClick={() => setConfirmingEnd(false)}>Cancelar</button></div></div> : <div className="event-end-prompt"><p className="muted">Use esta ação somente quando a programação tiver terminado.</p><button className="button button-danger" type="button" onClick={() => setConfirmingEnd(true)}><CircleStop size={16} /> Encerrar evento</button></div>}</AdminSection>}</div></div>; }
-function AdminSection({ title, children }: { title: string; children: React.ReactNode }) { return <section className="dashboard-card admin-section"><div className="card-header"><h2>{title}</h2></div>{children}</section>; }
-function Stat({ label, value }: { label: string; value: number }) { return <article className="stat-card"><div className="stat-card-label">{label}</div><strong>{value}</strong></article>; }
-function Check({ label, done }: { label: string; done: boolean }) { return <div className={done ? "check-row done" : "check-row"}><span className="check-marker">{done && <CheckIcon size={14} strokeWidth={3} />}</span><span>{label}</span></div>; }
-function EmptyEvents() { return <section className="empty-dashboard"><CircleUserRound size={42} /><h2>Seu primeiro evento começa aqui.</h2><p>Crie o evento, configure a agenda e publique quando estiver pronto.</p><Link className="button button-primary" href="/painel/eventos/novo"><Plus size={16} /> Criar evento</Link></section>; }
-function slugify(value: string) { return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""); }
-function isWebEvent(event: EventData) { return event.public_config.product_type !== "meeting"; }
-function tabTitle(tab: Tab) { return nav.find((item) => item.id === tab)?.label ?? "Painel"; }
-function eventStatusLabel(status: EventData["status"]) { return status ? { draft: "Rascunho", published: "Publicado", ended: "Encerrado", archived: "Arquivado" }[status] : "Rascunho"; }
+function Overview({ event, analytics, rooms, onNavigate }: { event: EventData; analytics: Analytics | null; rooms: Room[]; onNavigate: (tab: Tab) => void }) {
+  const room = mainRoom(rooms, event.id);
+  const steps: Array<{ label: string; detail: string; done: boolean; tab: Tab }> = [
+    { label: "Evento criado", detail: "Nome, descrição e horários definidos", done: true, tab: "settings" },
+    { label: "Inscrições abertas", detail: "O público pode confirmar sua participação", done: event.registration_open, tab: "settings" },
+    { label: "Auditório Zoom configurado", detail: "Sala principal pronta para receber o evento", done: !!room?.zoom_session?.configured, tab: "stream" },
+    { label: "Evento publicado", detail: "Página disponível para os participantes", done: event.status === "published", tab: "settings" },
+  ];
+  const ready = steps.filter((item) => item.done).length;
+  const ended = event.status === "ended" || event.status === "archived";
+  return <div className={styles.stack}>
+    <div className={styles.eventBanner}><div><span className={styles.badge}>{ended ? "Encerrado" : event.status === "published" ? "Publicado" : "Rascunho"}</span><h2>{event.name}</h2><p><CalendarDays size={16} />{dateTime(event.starts_at, event.timezone)} — {dateTime(event.ends_at, event.timezone)}</p></div><button className={styles.secondary} onClick={() => onNavigate("settings")}><Settings size={16} /> Editar evento</button></div>
+    <div className={styles.metrics}><Metric label="Inscrições realizadas" value={analytics?.registrations ?? 0} detail={`${analytics?.confirmed_registrations ?? 0} confirmadas`} /><Metric label="Interações no chat" value={analytics?.chat_messages ?? 0} detail="Mensagens enviadas no evento" /><Metric label={analytics?.is_live ? "Transmissão ativa há" : "Tempo da última transmissão"} value={duration(analytics?.live_duration_seconds)} detail="Tempo do auditório principal" /><Metric label="Rodadas de negócios realizadas" value={analytics?.networking?.realized ?? 0} detail="Conversas 1:1 com presença dos dois participantes" /></div>
+    <div className={styles.twoColumns}><section className={styles.card}><div className={styles.cardHeading}><div><h2>Preparação do evento</h2><p>Quatro passos para receber seu público.</p></div><span className={styles.badge}>{ready}/4</span></div><div className={styles.progress} role="progressbar" aria-label="Preparação do evento" aria-valuenow={ready} aria-valuemin={0} aria-valuemax={4}><span style={{ width: `${ready * 25}%` }} /></div><div className={styles.checklist}>{steps.map((step) => <button type="button" key={step.label} onClick={() => onNavigate(step.tab)}><span className={step.done ? styles.checkDone : styles.checkPending}>{step.done && <Check size={15} />}</span><div><strong>{step.label}</strong><small>{step.detail}</small></div></button>)}</div></section>
+      <section className={styles.card}><div className={styles.cardHeading}><div><h2>Acessos rápidos</h2><p>Prévia, operação e conteúdo do evento.</p></div></div><div className={styles.quickLinks}>{!ended && <><Link href={`/eventos/${event.slug}`} target="_blank">Página do evento <ExternalLink size={17} /></Link><Link href={`/eventos/${event.slug}/ao-vivo`} target="_blank">Entrar no auditório principal <ExternalLink size={17} /></Link><Link href={`/eventos/${event.slug}/lobby`} target="_blank">Lobby e rodadas de negócios <ExternalLink size={17} /></Link></>}{ended && <p>O evento foi encerrado. Você pode reabri-lo nas configurações.</p>}<button onClick={() => onNavigate("agenda")}>Organizar programação e palestrantes <CalendarDays size={17} /></button></div><p className={styles.hint}>A programação é opcional. Gravações estarão disponíveis em breve.</p></section>
+    </div>
+  </div>;
+}

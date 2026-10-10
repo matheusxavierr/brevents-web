@@ -1,75 +1,60 @@
+"use client";
+
 import Link from "next/link";
-import { ArrowRight, CalendarDays, MapPin, Play, Users } from "lucide-react";
-import { SiteFooter } from "./site-footer";
-import { SiteHeader } from "./site-header";
+import Image from "next/image";
+import { useEffect, useState } from "react";
+import { ArrowLeft, ArrowRight, CalendarDays, ChevronLeft, ChevronRight, Handshake, MapPin, Radio, ShieldCheck, UsersRound } from "lucide-react";
 import type { EventData } from "@/lib/api-types";
+import { HomeHeader } from "./home-header";
+import { useEventEntry } from "./use-event-entry";
+import styles from "./event-portal.module.css";
 
-function eventDate(event: EventData) {
-  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "long", hour: "2-digit", minute: "2-digit", timeZone: event.timezone }).format(new Date(event.starts_at));
-}
+type Tab = "overview" | "program" | "speakers";
+const tabNames = { overview: "Sobre o evento", program: "Programação", speakers: "Palestrantes" };
+const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+function date(value: string, timezone: string) { return new Date(value).toLocaleString("pt-BR", { timeZone: timezone, dateStyle: "long", timeStyle: "short" }); }
 
-function initials(name: string) {
-  return name.split(" ").slice(0, 2).map((part) => part[0]).join("");
-}
+export function EventLanding({ event, hasGuestTicket = false, initialTab = "overview" }: { event: EventData; hasGuestTicket?: boolean; initialTab?: Tab }) {
+  const [tab, setTab] = useState<Tab>(initialTab);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(6);
+  useEffect(() => {
+    const update = () => setPageSize(window.innerWidth <= 767 ? 2 : window.innerHeight < 800 ? 4 : 6);
+    const frame = window.requestAnimationFrame(update);
+    window.addEventListener("resize", update);
+    return () => { window.cancelAnimationFrame(frame); window.removeEventListener("resize", update); };
+  }, []);
+  const entry = useEventEntry(event, hasGuestTicket);
+  const sessions = (event.sessions ?? []).filter((item) => item.status === "published").sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  const speakers = event.speakers ?? Array.from(new Map(sessions.flatMap((item) => item.speakers_detail ?? []).map((speaker) => [speaker.id, speaker])).values());
+  const subtitle = typeof event.public_config.subtitle === "string" && event.public_config.subtitle.trim() ? event.public_config.subtitle : event.name;
+  const preview = event.status !== "published";
+  const count = tab === "program" ? sessions.length : speakers.length;
+  const pageCount = Math.max(1, Math.ceil(count / pageSize));
+  const safePage = Math.min(page, pageCount - 1);
+  const cover = typeof event.public_config.cover_image_url === "string" ? event.public_config.cover_image_url : "";
+  const entryHref = `/eventos/${event.slug}/${entry === "ready" ? "lobby" : "inscricao"}`;
+  const entryLabel = entry === "ready" ? "Entrar no lobby" : "Inscrever-se";
+  const entryButton = (compact = false) => entry === "checking"
+    ? <span className={styles.badge}>Verificando sua inscrição…</span>
+    : preview ? <span className={styles.badge}>Prévia privada</span> : <Link className={styles.primary} href={entryHref}>{compact ? entryLabel : entry === "ready" ? "Ir para o lobby do evento" : "Confirmar minha participação"}<ArrowRight size={16} /></Link>;
 
-export function EventLanding({ event }: { event: EventData }) {
-  const sessions = event.sessions ?? [];
-  const speakers = Array.from(new Map(sessions.flatMap((session) => session.speakers_detail ?? []).map((speaker) => [speaker.id, speaker])).values());
-  const featured = sessions[0];
-  const subtitle = typeof event.public_config.subtitle === "string" ? event.public_config.subtitle : "Ideias ao vivo. Conexões reais.";
-  const isPreview = Boolean(event.status && event.status !== "published");
-  return (
-    <>
-      <a className="skip-link" href="#conteudo">Pular para o conteúdo</a>
-      <SiteHeader current="inicio" eventSlug={event.slug} />
-      <main id="conteudo">
-        {isPreview && <div className="preview-banner" role="status"><strong>Prévia privada</strong><span>Este evento ainda não foi publicado. Somente gestores autenticados conseguem visualizar esta página.</span></div>}
-        <section className="hero">
-          <div className="container hero-grid">
-            <div className="hero-copy">
-              <p className="eyebrow">{event.name}</p>
-              <h1 className="display">{subtitle}</h1>
-              <p>{event.description}</p>
-              <div className="hero-actions">
-                <Link className="button button-primary" href={`/eventos/${event.slug}/inscricao`}>Inscreva-se <ArrowRight size={17} /></Link>
-                <Link className="button button-secondary" href={`/eventos/${event.slug}/agenda`}>Ver programação</Link>
-                <Link className="button button-quiet" href={`/eventos/${event.slug}/lobby`}>Entrar no lobby</Link>
-              </div>
-              <div className="event-meta" aria-label="Informações do evento">
-                <span><CalendarDays size={16} /> {eventDate(event)}</span>
-                <span><MapPin size={16} /> {String(event.public_config.location ?? "Online")} · {event.timezone}</span>
-              </div>
-            </div>
-            <div className="stage-preview" aria-label="Sessão em destaque">
-              <div className="stage-grid" /><div className="stage-orbit" />
-              <div className="stage-content">
-                <span className="live-pill"><span className="live-dot" /> {isPreview ? "Prévia do evento" : "Evento publicado"}</span>
-                <div className="stage-title"><p>{event.rooms?.[0]?.name ?? "Palco principal"}</p><h2>{featured?.title ?? event.name}</h2></div>
-                <div className="stage-footer">
-                  <div className="speaker-stack" aria-label="Palestrantes">{(featured?.speakers_detail ?? []).slice(0, 3).map((speaker) => <span className="avatar" key={speaker.id}>{initials(speaker.name)}</span>)}</div>
-                  <Link className="icon-button" href={`/eventos/${event.slug}/ao-vivo`} aria-label="Entrar na sala"><Play size={18} fill="currentColor" /></Link>
-                </div>
-              </div>
-            </div>
-          </div>
+  return <div className={styles.portal}><HomeHeader /><main className={styles.main}>
+    <div className={styles.context}><div><small>PÁGINA DO EVENTO</small><strong>{event.name}</strong></div><Link className={styles.back} href="/"><ArrowLeft size={15} /> Página inicial</Link></div>
+    <nav className={styles.navigation} aria-label="Conteúdo do evento"><div className={styles.tabs} role="tablist">{(Object.keys(tabNames) as Tab[]).map((item) => <button key={item} type="button" role="tab" aria-selected={tab === item} aria-controls="event-content" className={tab === item ? styles.active : ""} onClick={() => { setTab(item); setPage(0); }}>{tabNames[item]}</button>)}</div>{entryButton(true)}</nav>
+    <div className={styles.body} id="event-content" role="tabpanel" aria-label={tabNames[tab]}>
+      {tab === "overview" ? <div className={styles.overview}>
+        <section className={styles.hero}>{cover && <div className={styles.cover} style={{ backgroundImage: `url(${JSON.stringify(cover)})` }} />}<div><span className={styles.kicker}><Radio size={16} /> {preview ? "Prévia do evento" : "Encontro online · BR Events"}</span><h1>{subtitle}</h1><p>{event.description || "Uma oportunidade para acompanhar ideias, conversar com especialistas e criar conexões."}</p></div>
+          <div className={styles.metadata}><div><CalendarDays size={21} /><span><small>Quando acontece</small>{date(event.starts_at, event.timezone)}<small>Até {date(event.ends_at, event.timezone)}</small></span></div><div><MapPin size={21} /><span><small>Onde participar</small>{String(event.public_config.location ?? "Online, no BR Events")}<small>Horários em {event.timezone}</small></span></div></div>
         </section>
-        <section className="metrics-strip" aria-label="Números do evento"><div className="container metrics-grid">
-          <div className="metric"><strong>{sessions.length}</strong><span>sessões publicadas</span></div>
-          <div className="metric"><strong>{speakers.length}</strong><span>especialistas convidados</span></div>
-          <div className="metric"><strong>{new Set(sessions.map((item) => item.track).filter(Boolean)).size}</strong><span>trilhas de conteúdo</span></div>
-          <div className="metric"><strong>{event.rooms?.length ?? 0}</strong><span>salas disponíveis</span></div>
-        </div></section>
-        <section className="section"><div className="container">
-          <div className="section-heading"><div><p className="eyebrow">Programação</p><h2 className="section-title">Próximas sessões</h2></div><Link className="button button-quiet" href={`/eventos/${event.slug}/agenda`}>Agenda completa <ArrowRight size={16} /></Link></div>
-          <div className="schedule-list">{sessions.slice(0, 4).map((session) => <article className="schedule-item" key={session.id}><time className="schedule-time">{new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: event.timezone }).format(new Date(session.starts_at))}</time><div><h3 className="schedule-title">{session.title}</h3><p>{session.speakers_detail.map((speaker) => speaker.name).join(" · ") || "Palestrante a confirmar"}</p></div><span className="track-label"><span className="track-color" />{session.track || "Geral"}</span><span className="status-pill status-soon">Programada</span></article>)}</div>
-        </div></section>
-        <section className="section section-soft" id="palestrantes"><div className="container">
-          <div className="section-heading"><div><p className="eyebrow">Quem está no palco</p><h2 className="section-title">Pessoas que movem ideias</h2></div><span className="muted"><Users size={17} /> {speakers.length} especialistas</span></div>
-          <div className="speaker-grid">{speakers.map((speaker) => <article className="speaker-card" key={speaker.id}><div className="speaker-portrait">{initials(speaker.name)}</div><h3>{speaker.name}</h3><p>{speaker.bio}</p></article>)}</div>
-        </div></section>
-        {(event.recordings?.length ?? 0) > 0 && <section className="section section-dark"><div className="container cta-panel"><div><p className="eyebrow">On-demand</p><h2 className="section-title">Conteúdo para assistir no seu tempo.</h2><p>As gravações publicadas ficam disponíveis em um catálogo do evento.</p></div><Link className="button button-primary" href={`/eventos/${event.slug}/gravacoes`}>Ver gravações <ArrowRight size={17} /></Link></div></section>}
-      </main>
-      <SiteFooter />
-    </>
-  );
+        <aside className={styles.side}><section className={styles.card}><span className={`${styles.badge} ${entry === "ready" ? styles.open : ""}`}><ShieldCheck size={13} />{preview ? "Acesso do organizador" : entry === "ready" ? "Seu acesso está liberado" : "Participe do evento"}</span><h2>{entry === "ready" ? "Sua próxima parada é o lobby." : "Reserve seu lugar."}</h2><p>{entry === "ready" ? "Escolha entre acompanhar o auditório principal ou conversar em uma rodada de negócios, quando liberada pelo organizador." : "Após confirmar sua inscrição, você entra no lobby e escolhe como participar deste encontro."}</p>{entryButton()}</section>
+          <section className={styles.card}><h2>O que você encontra aqui</h2><div className={styles.feature}><Radio size={20} /><div><strong>Auditório principal</strong><small>Palestras, apresentações e interações com o público.</small></div></div><div className={styles.feature}><CalendarDays size={20} /><div><strong>{sessions.length ? `${sessions.length} momentos na programação` : "Programação em preparação"}</strong><small>Confira horários e temas na aba Programação.</small></div></div><div className={styles.feature}><Handshake size={20} /><div><strong>Rodadas de negócios 1:1</strong><small>O organizador define quando o espaço de networking fica aberto.</small></div></div></section>
+        </aside>
+      </div> : <section className={styles.card}><div className={styles.heading}><div><h1>{tab === "program" ? "Programação do evento" : "Conheça quem vai apresentar"}</h1><p>{tab === "program" ? `Horários em ${event.timezone} · ${sessions.length} atividades` : `${speakers.length} palestrantes neste encontro`}</p></div>{pageCount > 1 && <div className={styles.pagination}><button type="button" aria-label="Página anterior" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}><ChevronLeft size={16} /></button><span>{safePage + 1} / {pageCount}</span><button type="button" aria-label="Próxima página" disabled={safePage >= pageCount - 1} onClick={() => setPage(safePage + 1)}><ChevronRight size={16} /></button></div>}</div>
+        {tab === "program" ? sessions.length ? <div className={styles.agenda}>{sessions.slice(safePage * pageSize, safePage * pageSize + pageSize).map((item) => <article key={item.id} className={styles.talk}><time dateTime={item.starts_at}>{new Date(item.starts_at).toLocaleTimeString("pt-BR", { timeZone: event.timezone, hour: "2-digit", minute: "2-digit" })}<small>{new Date(item.starts_at).toLocaleDateString("pt-BR", { timeZone: event.timezone, day: "2-digit", month: "2-digit" })}</small></time><div><h3>{item.title}</h3><p>{item.speakers_detail?.map((speaker) => speaker.name).join(" · ") || "Apresentadores a confirmar"}</p>{item.description && <p>{item.description}</p>}{item.track && <span className={styles.badge}>{item.track}</span>}</div></article>)}</div> : <div className={styles.empty}><CalendarDays size={32} /><h2>A programação será divulgada em breve.</h2><p>Seu acesso ao evento não depende de uma agenda publicada. Depois de se inscrever, você pode entrar no lobby.</p></div>
+          : speakers.length ? <div className={styles.speakers}>{speakers.slice(safePage * pageSize, safePage * pageSize + pageSize).map((speaker) => <article key={speaker.id} className={styles.speaker}><div className={styles.portrait}>{speaker.avatar_url ? <Image src={speaker.avatar_url} alt={speaker.name} width={62} height={62} unoptimized /> : initials(speaker.name)}</div><h3>{speaker.name}</h3><p>{speaker.bio || "Participante da programação deste evento."}</p></article>)}</div> : <div className={styles.empty}><UsersRound size={32} /><h2>Palestrantes em preparação.</h2><p>Os nomes e as apresentações aparecerão aqui assim que forem cadastrados pelo organizador.</p></div>}
+      </section>}
+    </div>
+    <footer className={styles.footer}><span>BR Events · Eventos que aproximam pessoas</span><span>Auditório, programação e conexões em um só lugar.</span></footer>
+  </main></div>;
 }

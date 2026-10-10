@@ -870,7 +870,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .service-kicker { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; animation: service-reveal 480ms 60ms cubic-bezier(.22, .8, .25, 1) both; }
 .service-kicker .eyebrow { margin: 0; color: var(--signal); }
 .service-icon { display: grid; width: 40px; height: 40px; flex: 0 0 auto; place-items: center; border-radius: 50%; background: var(--ink); color: white; transition: transform 260ms ease, background-color 260ms ease; }
-.service-hero h1 { max-width: 980px; margin: 0 0 26px; font-size: clamp(3.5rem, 5.6vw, 5.65rem); font-weight: 700; line-height: .93; animation: service-reveal 520ms 110ms cubic-bezier(.22, .8, .25, 1) both; }
+.service-hero h1 { max-width: 980px; margin: 0 0 26px; font-size: clamp(2.4rem, 4.5vw, 4rem); font-weight: 400; line-height: 1.08; letter-spacing: -.04em; animation: service-reveal 520ms 110ms cubic-bezier(.22, .8, .25, 1) both; }
 .service-hero .service-lead { max-width: 940px; margin: 0; color: var(--muted); font-size: clamp(.98rem, 1.25vw, 1.16rem); line-height: 1.45; animation: service-reveal 520ms 170ms cubic-bezier(.22, .8, .25, 1) both; }
 .service-hero .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; animation: service-reveal 520ms 230ms cubic-bezier(.22, .8, .25, 1) both; }
 .service-hero .button { min-height: 52px; padding-inline: 30px; }
@@ -950,7 +950,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .service-hero > * { min-width: 0; max-width: 100%; }
   .service-kicker { margin-bottom: 22px; }
   .service-icon { width: 36px; height: 36px; }
-  .service-hero h1 { overflow-wrap: break-word; font-size: clamp(3rem, 13vw, 3.8rem); }
+  .service-hero h1 { overflow-wrap: break-word; font-size: clamp(2rem, 9vw, 3rem); }
   .service-hero .hero-actions { display: grid; }
   .service-hero .button { width: 100%; }
   .web-event-consultation { gap: 26px; border-radius: 22px; padding: 24px; }
@@ -1180,6 +1180,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .filter-pill { border-radius: 0; font-family: "Manrope", sans-serif; font-size: .65rem; text-transform: uppercase; }
 
 .live-page { background: var(--ink); }
+.dashboard-coming-soon { display: grid; max-width: 680px; gap: 14px; justify-items: start; padding: 32px; }
+.dashboard-coming-soon > svg { color: var(--signal); }
 .live-header { border-bottom: 1px solid rgb(255 255 255 / 16%); }
 .live-header .brand { color: white; }
 .live-header-title, .session-bar p { font-family: "Manrope", sans-serif; text-transform: uppercase; }
@@ -1360,7 +1362,7 @@ body { background: var(--canvas); color: var(--ink); }
 
 .live-page { background: var(--ink); }
 .live-header { padding: 12px 0 0; border: 0; }
-.live-header-inner { min-height: 62px; border-radius: 20px; background: #002d7a; padding-inline: 20px; }
+.live-header-inner { width: calc(100% - 40px); max-width: var(--container); min-height: 62px; margin-inline: auto; border-radius: 20px; background: #002d7a; padding-inline: 20px; }
 .video-player { border: 0; border-radius: 24px; clip-path: none; }
 .video-player::before, .video-player::after { border-radius: 50%; transform: none; }
 .video-center h1 { text-transform: none; }
@@ -2309,8 +2311,10 @@ section:nth-of-type(even) .eyebrow::before { background-image: url("/brand/star-
   .zoom-prejoin-chat-note { display: none; }
 }
 
-.meeting-live-page .live-header { padding: 6px 8px 0; }
-.meeting-live-page .live-header-inner { width: 100%; max-width: none; margin: 0; border-radius: 12px; padding-inline: 16px; }
+.meeting-live-page .live-header,
+.live-page:not(.meeting-live-page) .live-header { padding: 6px 8px 0; }
+.meeting-live-page .live-header-inner,
+.live-page:not(.meeting-live-page) .live-header-inner { width: 100%; max-width: none; margin: 0; border-radius: 12px; padding-inline: 16px; }
 .meeting-sheet-handle { display: none; }
 .live-exit-mobile { display: none; }
 .meeting-confirm-backdrop { position: fixed; z-index: 90; inset: 0; display: grid; place-items: center; background: rgb(0 24 66 / 66%); padding: 20px; backdrop-filter: blur(6px); }

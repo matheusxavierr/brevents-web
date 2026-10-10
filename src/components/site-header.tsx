@@ -11,7 +11,7 @@ export function SiteHeader({ current, eventSlug = "future-summit-2026" }: { curr
           <Link href={`/eventos/${eventSlug}`} aria-current={current === "inicio" ? "page" : undefined}>Início</Link>
           <Link href={`/eventos/${eventSlug}/agenda`} aria-current={current === "agenda" ? "page" : undefined}>Programação</Link>
           <Link href={`/eventos/${eventSlug}#palestrantes`}>Palestrantes</Link>
-          <Link className="button button-primary" href={`/eventos/${eventSlug}/ao-vivo`}>
+          <Link className="button button-primary" href={`/eventos/${eventSlug}/lobby`}>
             Entrar no evento <ArrowUpRight size={16} aria-hidden="true" />
           </Link>
         </nav>

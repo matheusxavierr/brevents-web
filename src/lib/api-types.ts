@@ -29,6 +29,7 @@ export type EventData = {
   feature_flags: Record<string, boolean>;
   rooms?: Room[];
   sessions?: Session[];
+  speakers?: Array<Pick<Speaker, "id" | "name" | "bio" | "avatar_url">>;
   recordings?: Recording[];
 };
 
@@ -227,9 +228,25 @@ export type Analytics = {
   total_visits: number;
   chat_messages: number;
   questions: number;
+  answered_questions?: number;
+  polls?: number;
+  poll_votes?: number;
+  poll_voters?: number;
+  average_duration_seconds?: number;
+  live_duration_seconds?: number;
+  is_live?: boolean;
+  presence_scope?: string;
+  registration_statuses?: Record<string, number>;
+  daily_activity?: Array<{ date: string; registrations: number; visits: number; messages: number; networking: number }>;
+  networking?: {
+    invitations: number; accepted: number; realized: number; completed: number; participants: number;
+    statuses: Record<string, number>;
+    conversations: Array<{ id: string; sender: string; recipient: string; topic: string; status: string; created_at: string; ended_at: string | null; realized: boolean }>;
+  };
   rooms: Array<{
     room_id: string;
     room_name: string;
+    purpose?: "main" | "networking";
     unique_viewers: number;
     visits: number;
     average_duration: string | null;
@@ -242,6 +259,6 @@ export type Paginated<T> = { count: number; next: string | null; previous: strin
 
 export type ChatChannel = { id: string; event: string; room: string | null; name: string };
 export type ChatMessage = { id: string; body: string; sender: (Partial<User> & { id: number; name?: string }) | null; created_at: string };
-export type Question = { id: string; content: string; score: number; voted: boolean; state: string; answered: boolean };
+export type Question = { id: string; room?: string; sender?: Partial<User> | null; created_at?: string; is_pinned?: boolean; content: string; score: number; voted: boolean; state: string; answered: boolean };
 export type PollOption = { id: string; text: string; position: number; votes: number | null };
-export type Poll = { id: string; question: string; state: string; options: PollOption[]; total_votes: number | null };
+export type Poll = { id: string; room?: string; allows_multiple?: boolean; show_results_before_close?: boolean; question: string; state: string; options: PollOption[]; total_votes: number | null };
