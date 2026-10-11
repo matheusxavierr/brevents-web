@@ -92,13 +92,14 @@ export type ZoomJoinResponse = {
 export type CaptionLanguage = "pt-BR" | "en-US" | "es-ES" | "ar-SA";
 
 export type LiveCaption = {
+  message_id?: string;
   id: string;
   zoom_session: number;
   speaker_identity: string;
   speaker_name: string;
-  source_language: CaptionLanguage;
+  source_language: CaptionLanguage | null;
   original_text: string;
-  translations: Record<CaptionLanguage, string>;
+  translations: Partial<Record<CaptionLanguage, string>>;
   created_at: string;
 };
 

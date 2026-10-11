@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ApiError, apiClient } from "@/lib/api-client";
 import type { CaptionLanguage, LiveCaption, ParticipantDirectoryEntry, StageInvitation, ZoomJoinResponse, ZoomSession } from "@/lib/api-types";
 import { LiveCaptionControls } from "./live-caption-controls";
+import { useZoomCaptions } from "./use-zoom-captions";
 import { defaultMediaPreferences, MediaDeviceSetup, type MediaPreferences, type VirtualBackgroundMode } from "./media-device-setup";
 
 type ZoomModule = typeof import("@zoom/videosdk");
@@ -87,7 +88,6 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
   const participantTrigger = useRef<HTMLButtonElement>(null);
   const participantSearchInput = useRef<HTMLInputElement>(null);
   const selfIdentity = useRef("");
-  const captionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stopPreviewRef = useRef<(() => Promise<void>) | null>(null);
   const isHost = useRef(false);
   const [state, setState] = useState<"ready" | "joining" | "joined" | "left" | "removed" | "ended" | "duplicate">("ready");
@@ -114,8 +114,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
   const [participantDirectory, setParticipantDirectory] = useState<Record<string, ParticipantDirectoryEntry>>({});
   const [mediaRequest, setMediaRequest] = useState<MediaRequest | null>(null);
   const [moderationFeedback, setModerationFeedback] = useState<{ userId: number; control: MediaControl; message: string; failed: boolean } | null>(null);
-  const [captionLanguage, setCaptionLanguage] = useState<CaptionLanguage | null>(null);
-  const [liveCaption, setLiveCaption] = useState<LiveCaption | null>(null);
+  const [captionClient, setCaptionClient] = useState<ZoomClient | null>(null);
   const [activeRoomMode, setActiveRoomMode] = useState<"event" | "meeting">(roomMode);
   const [mediaPreferences, setMediaPreferences] = useState<MediaPreferences>(defaultMediaPreferences);
   const [deviceMenu, setDeviceMenu] = useState<"audio" | "video" | null>(null);
@@ -202,27 +201,23 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
     };
   }, [deviceMenu]);
 
-  const publishTranscript = useCallback(async (text: string, sourceLanguage: CaptionLanguage) => {
-    const caption = guest
-      ? await fetch(`/api/guest/zoom/${session.id}/captions`, {
+  const saveTranscript = useCallback(async (text: string, sourceLanguage: CaptionLanguage, messageId: string) => {
+    if (guest) {
+      const response = await fetch(`/api/guest/zoom/${session.id}/captions`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ eventId, source_language: sourceLanguage, text }),
-        }).then(async (response) => {
-          const data = await response.json();
-          if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Não foi possível traduzir a fala.");
-          return data as LiveCaption;
-        })
-      : await apiClient<LiveCaption>(`zoom-sessions/${session.id}/captions/`, {
-          method: "POST",
-          body: { source_language: sourceLanguage, text },
+          body: JSON.stringify({ eventId, source_language: sourceLanguage, text, message_id: messageId }),
         });
-    const client = clientRef.current;
-    if (!client) return;
-    const result = await client.getCommandClient().send(JSON.stringify({ type: "caption.final", caption }));
-    ensureZoomSuccess(result);
-    onCaption?.(caption);
-  }, [eventId, guest, onCaption, session.id]);
+      if (!response.ok) throw new ApiError(response.status, await response.json().catch(() => null));
+      return;
+    }
+    await apiClient<LiveCaption>(`zoom-sessions/${session.id}/captions/`, {
+          method: "POST",
+          body: { source_language: sourceLanguage, text, message_id: messageId },
+        });
+  }, [eventId, guest, session.id]);
+
+  const captions = useZoomCaptions({ client: state === "joined" ? captionClient : null, sessionId: session.id, onCaption, saveTranscript });
 
   useEffect(() => {
     let thumbnailIndex = 0;
@@ -651,6 +646,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
       const initialParticipants = client.getAllUser();
       setParticipants(initialParticipants);
       setState("joined");
+      setCaptionClient(client);
       onJoinedChange?.(true);
       window.requestAnimationFrame(() => syncParticipantTiles(client.getAllUser()));
 
@@ -700,7 +696,6 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
           const command = JSON.parse(payload.text) as {
             type?: string;
             permissions?: ZoomJoinResponse["media_permissions"];
-            caption?: LiveCaption;
             control?: MediaControl;
           };
           const senderId = Number(payload.senderId);
@@ -761,16 +756,6 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
             setPermissions({ audio: false, video: false, screen_share: false });
             setOnStage(false);
             showMediaFeedback("Você saiu do palco", false);
-          }
-          if (
-            command.type === "caption.final"
-            && command.caption
-            && command.caption.speaker_identity !== selfIdentity.current
-          ) {
-            if (captionTimer.current) clearTimeout(captionTimer.current);
-            setLiveCaption(command.caption);
-            onCaption?.(command.caption);
-            captionTimer.current = setTimeout(() => setLiveCaption(null), 8_000);
           }
         } catch (commandError) {
           console.error("Não foi possível processar o comando de palco.", commandError);
@@ -999,8 +984,6 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
     participantSyncTimers.current = [];
     if (moderationFeedbackTimer.current) clearTimeout(moderationFeedbackTimer.current);
     moderationFeedbackTimer.current = null;
-    if (captionTimer.current) clearTimeout(captionTimer.current);
-    captionTimer.current = null;
     await releasePresence();
     if (isHost.current) {
       try { await apiClient(`zoom-sessions/${session.id}/end-live/`, { method: "POST" }); }
@@ -1036,7 +1019,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
     setModerationFeedback(null);
     setFocus("grid");
     setParticipants([]);
-    setLiveCaption(null);
+    setCaptionClient(null);
     setState("left");
     onJoinedChange?.(false);
   }
@@ -1197,7 +1180,6 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
       if (participantDirectoryTimer.current) clearTimeout(participantDirectoryTimer.current);
       if (moderationFeedbackTimer.current) clearTimeout(moderationFeedbackTimer.current);
       if (feedbackTimer.current) clearTimeout(feedbackTimer.current);
-      if (captionTimer.current) clearTimeout(captionTimer.current);
       if (presenceHeartbeatTimer.current) clearInterval(presenceHeartbeatTimer.current);
       void audioContextRef.current?.close();
       if (isHost.current) {
@@ -1297,9 +1279,9 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
       </div>
       {stageInvite && <div className="stage-invite" role="dialog" aria-label="Convite para o palco"><strong>O organizador convidou você para o palco.</strong><span>Você decide se quer liberar microfone e câmera.</span><div><button type="button" className="button button-primary" onClick={acceptStageInvite}>Aceitar convite</button><button type="button" className="button button-secondary" onClick={() => setStageInvite(null)}>Agora não</button></div></div>}
       {mediaRequest && <div className="stage-invite" role="dialog" aria-label="Solicitação do organizador"><strong>Solicitação do organizador</strong><span>{mediaRequest.control === "audio" ? "Ligar seu microfone?" : mediaRequest.control === "video" ? "Ligar sua câmera?" : "Compartilhar sua tela?"}</span><div><button type="button" className="button button-primary" onClick={acceptMediaRequest}>Aceitar</button><button type="button" className="button button-secondary" onClick={() => setMediaRequest(null)}>Agora não</button></div></div>}
-      {captionLanguage && liveCaption?.translations[captionLanguage] && <div className="live-caption-overlay" aria-live="polite" aria-atomic="true">
-        <strong>{liveCaption.speaker_name}</strong>
-        <span dir="auto">{liveCaption.translations[captionLanguage]}</span>
+      {captions.captionLanguage && captions.overlay && <div className="live-caption-overlay" aria-live="polite" aria-atomic="true">
+        <strong>{captions.overlay.speaker}</strong>
+        <span dir="auto">{captions.overlay.text}</span>
       </div>}
       {participantPanelOpen && <aside id="zoom-participant-directory" className="zoom-participant-panel" role="dialog" aria-modal="false" aria-label={role === "host" ? "Gerenciar participantes" : "Participantes da reunião"}>
         <header>
@@ -1358,6 +1340,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
         </section>
       </div>}
       {mediaFeedback && <div className="zoom-media-feedback" key={mediaFeedback.id} role="status" aria-live="polite">{mediaFeedback.message}</div>}
+      {!mediaFeedback && captions.ready && captions.notice && <div className="zoom-media-feedback" role="status" aria-live="polite">Transcrição do Zoom ativa nesta sala</div>}
       <div className="zoom-controls" aria-label="Controles da reunião">
         {permissions.audio && <div className="zoom-control-combo">
           <button type="button" onClick={toggleAudio} className={`zoom-control-main ${audioOn ? "active" : "muted"}`} aria-label={audioOn ? "Desativar microfone" : "Ativar microfone"}>{audioOn ? <Mic size={19} /> : <MicOff size={19} />}<span>{audioOn ? "Microfone" : "Sem áudio"}</span></button>
@@ -1383,9 +1366,15 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
         <LiveCaptionControls
           canSpeak={permissions.audio}
           microphoneOn={audioOn}
-          captionLanguage={captionLanguage}
-          onCaptionLanguageChange={setCaptionLanguage}
-          onTranscript={publishTranscript}
+          captionLanguage={captions.captionLanguage}
+          spokenLanguage={captions.spokenLanguage}
+          onCaptionLanguageChange={captions.selectCaptionLanguage}
+          onSpokenLanguageChange={captions.selectSpokenLanguage}
+          availableLanguages={captions.availableLanguages}
+          translationLanguages={captions.translationLanguages}
+          ready={captions.ready}
+          error={captions.error}
+          onRetry={captions.retry}
         />
         <button type="button" onClick={() => setLeaveConfirmationOpen(true)} className="danger"><PhoneOff size={19} /><span>Sair</span></button>
       </div>

@@ -8,7 +8,7 @@ function ticketCookieName(eventId: string) {
 
 export async function POST(request: Request, context: RouteContext<"/api/guest/zoom/[id]/captions">) {
   const { id } = await context.params;
-  const payload = (await request.json()) as { eventId?: string; source_language?: string; text?: string };
+  const payload = (await request.json()) as { eventId?: string; source_language?: string; text?: string; message_id?: string };
   if (!payload.eventId) return NextResponse.json({ detail: "Evento obrigatório." }, { status: 400 });
   const ticket = (await cookies()).get(ticketCookieName(payload.eventId))?.value;
   if (!ticket) return NextResponse.json({ detail: "Inscrição não encontrada." }, { status: 401 });
@@ -19,6 +19,7 @@ export async function POST(request: Request, context: RouteContext<"/api/guest/z
       ticket_code: ticket,
       source_language: payload.source_language,
       text: payload.text,
+      message_id: payload.message_id,
     }),
     cache: "no-store",
   });

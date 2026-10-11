@@ -10,6 +10,7 @@ import type { ChatChannel, ChatMessage, EventData, LiveCaption, Paginated, Room,
 import { isFatalRealtimeClose, realtimeReconnectDelay, websocketBaseUrl } from "@/lib/realtime";
 import { formatChatTime } from "@/lib/format-date";
 import { normalizeRealtimeChatMessage } from "@/lib/chat";
+import { mergeTranscriptHistory } from "@/lib/zoom-captions";
 import { Brand } from "./brand";
 import { ZoomVideoRoom } from "./zoom-video-room";
 import { useSession } from "./session-provider";
@@ -115,8 +116,8 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
         }
         if (activeRoom.zoom_session) {
           apiClient<LiveCaption[]>(`zoom-sessions/${activeRoom.zoom_session.id}/captions/`)
-            .then((history) => { if (!cancelled) setCaptions(history); })
-            .catch(() => undefined);
+            .then((history) => { if (!cancelled) setCaptions((current) => mergeTranscriptHistory(history, current)); })
+            .catch((reason) => console.error("Não foi possível carregar o histórico de transcrição.", reason));
         }
 
         if (cancelled) return;
@@ -184,7 +185,7 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
   }, [event.id, inRoom, room]);
 
   function addCaption(caption: LiveCaption) {
-    setCaptions((current) => current.some((item) => item.id === caption.id) ? current : [...current, caption]);
+    setCaptions((current) => mergeTranscriptHistory(current, [caption]));
   }
 
   useEffect(() => {
