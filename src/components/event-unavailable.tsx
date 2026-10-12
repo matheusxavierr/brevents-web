@@ -1,12 +1,14 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { ArrowRight, CalendarX2, Home } from "lucide-react";
 import { Brand } from "./brand";
 
 type EventUnavailableProps = {
   ended?: boolean;
+  actions?: ReactNode;
 };
 
-export function EventUnavailable({ ended = false }: EventUnavailableProps) {
+export function EventUnavailable({ ended = false, actions }: EventUnavailableProps) {
   return (
     <main className="event-unavailable">
       <section className="event-unavailable-stage" aria-hidden="true">
@@ -33,6 +35,7 @@ export function EventUnavailable({ ended = false }: EventUnavailableProps) {
             : "O link pode estar incorreto, o evento pode ter terminado ou o acesso pode ter sido desativado pelo organizador."}
         </p>
         <div className="event-unavailable-actions">
+          {actions}
           <Link className="button button-primary" href="/"><Home size={17} /> Voltar ao início</Link>
           <Link className="button button-secondary" href="/entrar">Entrar na minha conta <ArrowRight size={17} /></Link>
         </div>
