@@ -3,24 +3,30 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useZoomCaptions } from "@/components/use-zoom-captions";
 import { LiveCaptionControls } from "@/components/live-caption-controls";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { captionTimestamp, mergeTranscriptHistory, type ZoomCaptionMessage } from "@/lib/zoom-captions";
+import { assertCaptionSuccess, captionTimestamp, configureCaptionLanguage, mergeTranscriptHistory, shouldDisplayCaption, type ZoomCaptionMessage } from "@/lib/zoom-captions";
 
 function mockClient() {
   const listeners = new Map<string, (...args: never[]) => void>();
+  let speaking: string | undefined;
+  let reading: string | undefined;
   const ltt = {
-    startLiveTranscription: vi.fn().mockResolvedValue(""),
-    setSpeakingLanguage: vi.fn().mockResolvedValue(""),
-    setTranslationLanguage: vi.fn().mockResolvedValue(""),
+    startLiveTranscription: vi.fn().mockResolvedValue({ autoCaption: true, lang: 6, language: "pt" }),
+    setSpeakingLanguage: vi.fn().mockImplementation(async (language: string) => { speaking = language; return ""; }),
+    setTranslationLanguage: vi.fn().mockImplementation(async (language?: string) => { reading = language; return ""; }),
+    getCurrentTranscriptionLanguage: vi.fn(() => speaking ? { code: speaking } : null),
+    getCurrentTranslationLanguage: vi.fn(() => reading ? { code: reading } : null),
     disableCaptions: vi.fn(),
     getLiveTranscriptionStatus: vi.fn().mockReturnValue({
       isLiveTranscriptionEnabled: true, isLiveTranslationEnabled: true, isHostDisableCaptions: false,
       transcriptionLanguage: "en;pt;es;ar;",
-      translationLanguage: [{ speakingLanguage: "pt", translatedToLanguage: "en;es;ar;" }, { speakingLanguage: "en", translatedToLanguage: "pt;es;ar;" }],
+      translationLanguage: [{ speakingLanguage: "pt", translatedToLanguage: "pt-br;pt-pt;en;es;ar;" }, { speakingLanguage: "en", translatedToLanguage: "pt-br;pt-pt;es;ar;" }],
     }),
   };
   const client = {
     getLiveTranscriptionClient: () => ltt,
     getCurrentUserInfo: () => ({ userId: 42 }),
+    getAllUser: () => [{ userId: 42 }, { userId: 7 }],
+    getCommandClient: () => ({ send: vi.fn().mockResolvedValue({ text: "language metadata" }) }),
     on: vi.fn((event, listener) => listeners.set(event, listener)),
     off: vi.fn((event) => listeners.delete(event)),
   };
@@ -32,6 +38,97 @@ const message = { msgId: "phrase-1", userId: 42, displayName: "Organizador", tex
 
 describe("Zoom native captions", () => {
   beforeEach(() => localStorage.clear());
+  it("uses original captions only when the actual speaker's language matches the selected reading language", () => {
+    expect(shouldDisplayCaption(message, "en-US", "en-US")).toBe(true);
+    expect(shouldDisplayCaption(message, "en-US", "pt-BR")).toBe(false);
+    expect(shouldDisplayCaption(message, "en-US", undefined)).toBe(false);
+    expect(shouldDisplayCaption(message, null, "en-US")).toBe(false);
+    expect(shouldDisplayCaption({ ...message, language: 0 }, "en-US", "pt-BR")).toBe(true);
+  });
+  it("does not reapply an already-active reading language, and accepts only a confirmed timeout", async () => {
+    const configure = vi.fn();
+    await configureCaptionLanguage(() => ({ code: "en" }), configure, "en");
+    expect(configure).not.toHaveBeenCalled();
+    let code = "es";
+    const timeout = { type: "OPERATION_TIMEOUT", errorCode: 1 };
+    configure.mockImplementationOnce(async () => { code = "en"; throw timeout; });
+    await expect(configureCaptionLanguage(() => ({ code }), configure, "en")).resolves.toBeUndefined();
+    configure.mockRejectedValueOnce(timeout);
+    await expect(configureCaptionLanguage(() => ({ code: "es" }), configure, "en")).rejects.toBe(timeout);
+    const denied = { type: "INVALID_OPERATION", errorCode: 7304 };
+    configure.mockImplementationOnce(async () => { code = "en"; throw denied; });
+    code = "es";
+    await expect(configureCaptionLanguage(() => ({ code }), configure, "en")).rejects.toBe(denied);
+  });
+  it("shows English originals from local and known remote English speakers, but never Portuguese originals", async () => {
+    localStorage.setItem("brevents-spoken-language", "en-US");
+    localStorage.setItem("brevents-caption-language", "en-US");
+    const zoom = mockClient();
+    const { result } = renderHook(() => useZoomCaptions({ client: zoom.client, sessionId: 1, saveTranscript: vi.fn() }));
+    await waitFor(() => expect(zoom.ltt.setTranslationLanguage).toHaveBeenLastCalledWith("en"));
+    zoom.emit({ ...message, text: "Hello", done: false });
+    expect(result.current.overlay?.text).toBe("Hello");
+    zoom.emitEvent("command-channel-message", { senderId: "7", text: JSON.stringify({ type: "caption.language", language: "en-US" }) });
+    zoom.emit({ ...message, userId: 7, text: "Remote English", done: false });
+    expect(result.current.overlay?.text).toBe("Remote English");
+    zoom.emitEvent("command-channel-message", { senderId: "7", text: JSON.stringify({ type: "caption.language", language: "pt-BR" }) });
+    zoom.emit({ ...message, userId: 7, text: "Bom dia", done: false });
+    expect(result.current.overlay?.text).toBe("Remote English");
+    zoom.emit({ ...message, userId: 7, language: 0, text: "Good morning", done: false });
+    expect(result.current.overlay?.text).toBe("Good morning");
+    act(() => result.current.selectSpokenLanguage("es-ES"));
+    await waitFor(() => expect(zoom.ltt.setSpeakingLanguage).toHaveBeenLastCalledWith("es"));
+    expect(zoom.ltt.setTranslationLanguage).toHaveBeenCalledTimes(1);
+  });
+  it("clears only a transient timeout once the requested language is confirmed and a matching caption arrives", async () => {
+    const zoom = mockClient();
+    const { result } = renderHook(() => useZoomCaptions({ client: zoom.client, sessionId: 1, saveTranscript: vi.fn() }));
+    await waitFor(() => expect(zoom.ltt.setSpeakingLanguage).toHaveBeenCalled());
+    zoom.ltt.setTranslationLanguage.mockRejectedValueOnce({ type: "OPERATION_TIMEOUT", errorCode: 1 });
+    act(() => result.current.selectCaptionLanguage("en-US"));
+    await waitFor(() => expect(result.current.error).toContain("confirmar"));
+    zoom.emit({ ...message, language: 0, text: "Old caption", done: false });
+    expect(result.current.error).toContain("confirmar");
+    zoom.ltt.getCurrentTranslationLanguage.mockReturnValue({ code: "en" });
+    zoom.emit({ ...message, language: 0, text: "Confirmed caption", done: false });
+    expect(result.current.error).toBe("");
+  });
+  it("restores English original captions after retry without resending an already-active translation setting", async () => {
+    localStorage.setItem("brevents-spoken-language", "en-US");
+    localStorage.setItem("brevents-caption-language", "en-US");
+    const zoom = mockClient();
+    const { result } = renderHook(() => useZoomCaptions({ client: zoom.client, sessionId: 1, saveTranscript: vi.fn() }));
+    await waitFor(() => expect(zoom.ltt.setTranslationLanguage).toHaveBeenCalledTimes(1));
+    act(() => result.current.retry());
+    await waitFor(() => expect(zoom.ltt.startLiveTranscription).toHaveBeenCalledTimes(2));
+    await act(async () => { await Promise.resolve(); });
+    zoom.emit({ ...message, text: "Still working", done: false });
+    expect(result.current.overlay?.text).toBe("Still working");
+    expect(zoom.ltt.setTranslationLanguage).toHaveBeenCalledTimes(1);
+  });
+  it("accepts the real active caption-status response without swallowing SDK failures", () => {
+    expect(() => assertCaptionSuccess({ autoCaption: true, lang: 6, language: "pt" })).not.toThrow();
+    const failure = { type: "INVALID_OPERATION", errorCode: 7305, reason: "unsupported" };
+    expect(() => assertCaptionSuccess(failure)).toThrow();
+    expect(() => assertCaptionSuccess({})).toThrow("resultado inesperado");
+  });
+  it("starts immediately with saved Portuguese reading and uses separate speech and translation codes", async () => {
+    localStorage.setItem("brevents-spoken-language", "pt-BR");
+    localStorage.setItem("brevents-caption-language", "pt-BR");
+    const zoom = mockClient();
+    const { result } = renderHook(() => useZoomCaptions({ client: zoom.client, sessionId: 1, saveTranscript: vi.fn() }));
+    await waitFor(() => expect(zoom.ltt.setTranslationLanguage).toHaveBeenLastCalledWith("pt-br"));
+    expect(zoom.ltt.setSpeakingLanguage).toHaveBeenLastCalledWith("pt");
+    expect(result.current.error).toBe("");
+    expect(result.current.translationLanguages).toContain("pt-BR");
+    zoom.emit({ ...message, language: 40, done: false });
+    expect(result.current.overlay?.text).toBe("Bom dia");
+    act(() => result.current.selectSpokenLanguage("en-US"));
+    await waitFor(() => expect(zoom.ltt.setSpeakingLanguage).toHaveBeenLastCalledWith("en"));
+    expect(zoom.ltt.setTranslationLanguage).toHaveBeenLastCalledWith("pt-br");
+    zoom.emit({ ...message, msgId: "translated-pt", language: 40, text: "Olá novamente" });
+    expect(result.current.overlay?.text).toBe("Olá novamente");
+  });
   it("normalizes Zoom seconds and milliseconds without Invalid Date", () => {
     expect(captionTimestamp(1791737780)).toBe(captionTimestamp(1791737780000));
   });

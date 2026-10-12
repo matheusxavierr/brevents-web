@@ -1,9 +1,23 @@
 import { spawnSync } from "node:child_process";
 import { createServer } from "node:http";
-import { createReadStream } from "node:fs";
+import { createReadStream, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
+import ts from "typescript";
+
+// Use the application's actual assertion and language mapping, not a looser
+// diagnostic-only interpretation that could hide regressions in the UI.
+const helperCode = ts.transpileModule(readFileSync(new URL("../src/lib/zoom-captions.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+const { assertCaptionSuccess, captionLanguages, configureCaptionLanguage, shouldDisplayCaption } = await import(`data:text/javascript;base64,${Buffer.from(helperCode).toString("base64")}`);
+const readingKey = process.env.ZOOM_CHECK_READ_LANGUAGE ?? "pt-BR";
+const speakingKey = process.env.ZOOM_CHECK_SPOKEN_LANGUAGE ?? "pt-BR";
+const reading = captionLanguages[readingKey];
+const speaking = captionLanguages[speakingKey];
+if (!reading || !speaking) throw new Error("Unsupported diagnostic language.");
+const assertionSource = assertCaptionSuccess.toString();
+const configurationSource = configureCaptionLanguage.toString();
+const displaySource = shouldDisplayCaption.toString();
 
 // This diagnostic opens one short-lived Zoom session. An optional WAV is sent
 // through Chromium's fake microphone; it never uses the person's real microphone,
@@ -34,13 +48,18 @@ try {
   const page = await browser.newPage({ permissions: audioFixture ? ["microphone"] : [] });
   await page.goto(`http://127.0.0.1:${server.address().port}`);
   await page.addScriptTag({ path: resolve("node_modules/@zoom/videosdk/dist/index.umd.js") });
-  const evaluation = page.evaluate(async ({ token, sessionName, withAudio }) => {
+  const evaluation = page.evaluate(async ({ token, sessionName, withAudio, assertionSource, reading, speaking, configurationSource }) => {
+    const assertResult = new Function(`return (${assertionSource});`)();
+    const configureLanguage = new Function("assertCaptionSuccess", `return (${configurationSource});`)(assertResult);
     const sdk = window.WebVideoSDK.default;
     const client = sdk.createClient();
     const failures = {};
+    const returnShapes = {};
     const execute = async (name, operation) => {
       try {
         const value = await operation();
+        if (["start", "speaking", "translation"].includes(name)) returnShapes[name] = { kind: typeof value, keys: value && typeof value === "object" ? Object.keys(value) : [], value: typeof value === "string" ? value : undefined };
+        if (["start", "speaking", "translation"].includes(name)) assertResult(value);
         if (value && (typeof value === "string" || "type" in value || "errorCode" in value)) failures[name] = { errorCode: value.errorCode, type: value.type, reason: value.reason ?? value.message ?? String(value) };
       } catch (reason) {
         failures[name] = { errorCode: reason?.errorCode, type: reason?.type, reason: reason?.reason ?? reason?.message ?? String(reason) };
@@ -57,8 +76,12 @@ try {
       client.on("caption-message", (message) => { if (message.done) captions.push({ text: message.text, language: message.language, done: message.done }); });
       await execute("start", () => ltt.startLiveTranscription());
       if (!failures.start) {
-        await execute("speaking", () => ltt.setSpeakingLanguage("pt"));
-        await execute("translation", () => ltt.setTranslationLanguage("en"));
+        await execute("speaking", () => configureLanguage(() => ltt.getCurrentTranscriptionLanguage(), () => ltt.setSpeakingLanguage(speaking.zoom), speaking.zoom));
+        await execute("translation", () => configureLanguage(() => ltt.getCurrentTranslationLanguage(), () => ltt.setTranslationLanguage(reading.translation), reading.translation));
+        client.on("command-channel-message", (payload) => {
+          const command = JSON.parse(payload.text);
+          if (command.type === "caption.language.request") void client.getCommandClient().send(JSON.stringify({ type: "caption.language", language: speaking.key }), Number(payload.senderId));
+        });
       }
       if (withAudio && Object.keys(failures).length === 0) {
         window.diagnosticHostJoined = true;
@@ -74,41 +97,55 @@ try {
         await new Promise((done) => setTimeout(done, 30_000));
         await client.getMediaStream().stopAudio();
       }
-      return { transcriptionEnabled: status.isLiveTranscriptionEnabled, translationEnabled: status.isLiveTranslationEnabled, hostDisabled: status.isHostDisableCaptions, transcriptionLanguages: status.transcriptionLanguage, failures, ...(withAudio ? { captions } : {}) };
+      return { transcriptionEnabled: status.isLiveTranscriptionEnabled, translationEnabled: status.isLiveTranslationEnabled, hostDisabled: status.isHostDisableCaptions, reading: reading.translation, returnShapes, failures, ...(withAudio ? { captions } : {}) };
     } finally {
       try { await client.leave(true); } catch { /* Session may not have joined. */ }
       sdk.destroyClient();
     }
-  }, { token, sessionName, withAudio: Boolean(audioFixture) });
+  }, { token, sessionName, withAudio: Boolean(audioFixture), assertionSource, reading, speaking: { ...speaking, key: speakingKey }, configurationSource });
   let viewer;
   if (audioFixture) {
     await Promise.race([evaluation, page.waitForFunction(() => window.diagnosticHostJoined, null, { timeout: 30_000 })]);
     viewer = await browser.newPage();
     await viewer.goto(`http://127.0.0.1:${server.address().port}`);
     await viewer.addScriptTag({ path: resolve("node_modules/@zoom/videosdk/dist/index.umd.js") });
-    await viewer.evaluate(async ({ token, sessionName }) => {
+    await viewer.evaluate(async ({ token, sessionName, assertionSource, reading, displaySource, languageCatalog, readingKey, configurationSource }) => {
+      const assertResult = new Function(`return (${assertionSource});`)();
+      const configureLanguage = new Function("assertCaptionSuccess", `return (${configurationSource});`)(assertResult);
+      const display = new Function("captionLanguages", `return (${displaySource});`)(languageCatalog);
       const sdk = window.WebVideoSDK.default;
       const client = sdk.createClient();
       window.diagnosticViewer = client;
       window.diagnosticCaptions = [];
+      window.diagnosticRenderedCaptions = [];
+      const speakers = new Map();
+      client.on("command-channel-message", (payload) => {
+        const command = JSON.parse(payload.text);
+        if (command.type === "caption.language" && Object.hasOwn(languageCatalog, command.language)) speakers.set(Number(payload.senderId), command.language);
+      });
       await client.init("en-US", "Global", { patchJsMedia: true });
       await client.join(sessionName, token, "BR Events caption viewer", "");
-      client.on("caption-message", (message) => { if (message.done) window.diagnosticCaptions.push({ text: message.text, language: message.language, done: message.done }); });
+      client.on("caption-message", (message) => {
+        if (!message.done) return;
+        window.diagnosticCaptions.push({ text: message.text, language: message.language, done: message.done });
+        if (display(message, readingKey, speakers.get(message.userId))) window.diagnosticRenderedCaptions.push(message.text);
+      });
       const ltt = client.getLiveTranscriptionClient();
-      const start = await ltt.startLiveTranscription();
-      if (start && typeof start === "object" && "type" in start) throw new Error("Viewer could not start transcription.");
-      await ltt.setSpeakingLanguage("pt");
-      await ltt.setTranslationLanguage("en");
-    }, { token: viewerToken, sessionName });
+      assertResult(await ltt.startLiveTranscription());
+      await configureLanguage(() => ltt.getCurrentTranscriptionLanguage(), () => ltt.setSpeakingLanguage("pt"), "pt");
+      await configureLanguage(() => ltt.getCurrentTranslationLanguage(), () => ltt.setTranslationLanguage(reading.translation), reading.translation);
+      await client.getCommandClient().send(JSON.stringify({ type: "caption.language.request" }));
+    }, { token: viewerToken, sessionName, assertionSource, reading, displaySource, languageCatalog: captionLanguages, readingKey, configurationSource });
     await Promise.race([evaluation, page.getByRole("button", { name: "Reproduzir áudio de teste" }).click({ timeout: 30_000 })]);
   }
   const result = await Promise.race([evaluation, new Promise((_, reject) => setTimeout(() => reject(new Error("Zoom diagnostic exceeded 90 seconds.")), 90_000).unref())]);
   if (viewer) {
     result.viewerCaptions = await viewer.evaluate(() => window.diagnosticCaptions);
+    result.renderedCaptions = await viewer.evaluate(() => window.diagnosticRenderedCaptions);
     await viewer.evaluate(async () => { try { await window.diagnosticViewer.leave(); } finally { window.WebVideoSDK.default.destroyClient(); } });
   }
   console.log(JSON.stringify(result, null, 2));
-  if (Object.keys(result.failures).length || (audioFixture && (!result.captions?.some((item) => item.language === 400) || !result.viewerCaptions?.some((item) => item.language === 0)))) process.exitCode = 1;
+  if (Object.keys(result.failures).length || (audioFixture && (!result.captions?.some((item) => item.language === 400) || !result.renderedCaptions?.length))) process.exitCode = 1;
 } finally {
   await browser?.close();
   await new Promise((done) => server.close(done));

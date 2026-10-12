@@ -1,10 +1,10 @@
 import type { CaptionLanguage, LiveCaption } from "./api-types";
 
 export const captionLanguages = {
-  "pt-BR": { label: "Português", short: "PT", zoom: "pt", code: 6 },
-  "en-US": { label: "English", short: "EN", zoom: "en", code: 0 },
-  "es-ES": { label: "Español", short: "ES", zoom: "es", code: 7 },
-  "ar-SA": { label: "العربية", short: "AR", zoom: "ar", code: 14 },
+  "pt-BR": { label: "Português", short: "PT", zoom: "pt", translation: "pt-br", code: 40 },
+  "en-US": { label: "English", short: "EN", zoom: "en", translation: "en", code: 0 },
+  "es-ES": { label: "Español", short: "ES", zoom: "es", translation: "es", code: 7 },
+  "ar-SA": { label: "العربية", short: "AR", zoom: "ar", translation: "ar", code: 14 },
 } as const;
 
 export type ZoomCaptionMessage = {
@@ -36,6 +36,7 @@ export function captionTimestamp(timestamp: number): string {
 }
 
 export function captionError(error: unknown): string {
+  if (error && typeof error === "object" && "type" in error && error.type === "OPERATION_TIMEOUT") return "O Zoom demorou para confirmar o idioma solicitado. Tente novamente se a legenda não aparecer.";
   const code = error && typeof error === "object" && "errorCode" in error ? error.errorCode : null;
   if (code === 7300) return "Transcrição e tradução não estão habilitadas nesta conta Zoom.";
   if (code === 7301) return "As legendas foram desativadas pelo organizador.";
@@ -44,7 +45,39 @@ export function captionError(error: unknown): string {
 }
 
 export function assertCaptionSuccess(result: unknown): void {
-  if (result !== "" && result !== undefined) throw result;
+  if (result === "" || result === undefined) return;
+  if (result && typeof result === "object") {
+    if ("type" in result || "errorCode" in result) throw result;
+    // SDK 2.5 resolves startLiveTranscription with caption-status, despite its
+    // declaration promising ExecutedResult. Do not reject a real active status.
+    if ("autoCaption" in result && result.autoCaption === true) return;
+  }
+  throw new Error("O Zoom retornou um resultado inesperado ao configurar as legendas.");
+}
+
+type CurrentLanguage = { code: string } | null;
+
+export async function configureCaptionLanguage(
+  current: () => CurrentLanguage,
+  configure: () => Promise<unknown>,
+  requested: string | undefined,
+): Promise<void> {
+  const matches = () => current()?.code.toLowerCase() === requested;
+  if (matches()) return;
+  try {
+    assertCaptionSuccess(await configure());
+  } catch (reason) {
+    // A timeout can be a missing acknowledgement, not a failed change. Only
+    // accept it when the SDK confirms the exact requested language is active.
+    if (reason && typeof reason === "object" && "type" in reason && reason.type === "OPERATION_TIMEOUT" && matches()) return;
+    throw reason;
+  }
+}
+
+export function shouldDisplayCaption(message: ZoomCaptionMessage, selected: CaptionLanguage | null, speakerLanguage: CaptionLanguage | undefined): boolean {
+  if (!selected) return false;
+  return message.language === captionLanguages[selected].code
+    || (message.language === 400 && speakerLanguage === selected);
 }
 
 export function mergeTranscriptHistory(history: LiveCaption[], incoming: LiveCaption[]): LiveCaption[] {
