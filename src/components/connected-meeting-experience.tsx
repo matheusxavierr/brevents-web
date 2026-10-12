@@ -17,7 +17,7 @@ import { useSession } from "./session-provider";
 type MeetingTab = "chat" | "transcript";
 type JoinResponse = { token: string };
 
-export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/", onExit }: { event: EventData; roomOverride?: Room; exitHref?: string; onExit?: () => void }) {
+export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/", onExit, exitLabel = "Encerrar conversa" }: { event: EventData; roomOverride?: Room; exitHref?: string; onExit?: () => void; exitLabel?: string }) {
   const router = useRouter();
   const { user: sessionUser } = useSession();
   const room = roomOverride ?? event.rooms?.find((item) => item.mode === "meeting" && item.zoom_session) ?? event.rooms?.[0];
@@ -208,7 +208,7 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
           <button className="button meeting-copy-link" type="button" onClick={copyMeetingLink}>
             {copied ? <Check size={16} /> : <Copy size={16} />} {copied ? "Link copiado" : "Compartilhar"}
           </button>
-          {onExit ? <button className="button live-exit" type="button" onClick={onExit}><ChevronLeft size={16} /> Encerrar conversa</button> : <Link className="button live-exit" href={exitHref}><ChevronLeft size={16} /> Voltar pra Home</Link>}
+          {onExit ? <button className="button live-exit" type="button" onClick={onExit}><ChevronLeft size={16} /> {exitLabel}</button> : <Link className="button live-exit" href={exitHref}><ChevronLeft size={16} /> Voltar pra Home</Link>}
         </div>
       </header>
       <div className={`live-layout${interactionHidden ? " meeting-panel-hidden" : ""}`}>

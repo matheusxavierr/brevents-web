@@ -44,6 +44,10 @@ export type Room = {
   position: number;
   module_config?: Array<{ type: string; config: Record<string, unknown> }>;
   zoom_session?: ZoomSession | null;
+  company_name?: string;
+  contact_name?: string;
+  location?: string;
+  host_registration?: string | null;
 };
 
 export type ZoomSession = {
