@@ -2270,7 +2270,8 @@ section:nth-of-type(even) .eyebrow::before { background-image: url("/brand/star-
 }
 .route-back-button { display: none !important; }
 
-/* ===================================================================   Header logado: menus Produtos / Meus eventos e atalhos de meeting e hub
+/* ==========================================================================
+   Header logado: menus Produtos / Meus eventos e atalhos de meeting e hub
    ========================================================================== */
 .home-menu { position: relative; }
 .home-menu-trigger {
@@ -2404,7 +2405,8 @@ section:nth-of-type(even) .eyebrow::before { background-image: url("/brand/star-
 @media (max-width: 520px) {
   .my-events-hero { padding-top: 42px; }
   .my-event-actions .button { width: 100%; justify-content: center; }
-=======
+}
+
 @media (max-width: 960px) {
   .meeting-live-page { height: 100dvh; }
   .meeting-live-page .live-header { padding: 6px 8px 0; }
