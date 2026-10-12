@@ -1,0 +1,26 @@
+.hero { padding: 64px 0 46px; }
+.heroGrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); align-items: center; gap: 52px; }
+.copy { min-width: 0; }
+.hero .copy h1 { margin: 18px 0 24px; font-size: clamp(2.4rem, 3.6vw, 3.8rem); line-height: 1.12; letter-spacing: -.035em; }
+.copy > p:not(:first-child) { margin: 0; color: var(--muted); font-size: 1rem; line-height: 1.8; }
+.copy > div { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
+.heroVisual { min-width: 0; margin: 0; }
+.mainPreview,.miniPreview { position: relative; overflow: hidden; border: 1px solid #d1dff4; border-radius: 20px; background: #06245e; padding: 8px; box-shadow: 0 20px 48px rgb(0 44 112 / 14%); }
+.mainPreview > span,.miniPreview > span { display: flex; align-items: center; gap: 7px; color: #e1ecff; padding: 8px 8px 13px; font-size: .67rem; font-weight: 600; }
+.mainPreview img,.miniPreview img { display: block; width: 100%; height: auto; border-radius: 12px; }
+.miniPreview { width: 62%; margin: -46px 14px 0 auto; border: 6px solid var(--canvas); padding: 5px; transform: rotate(2deg); }
+.miniPreview > span { font-size: .6rem; padding: 6px 7px 8px; }
+.heroVisual figcaption { margin-top: 10px; color: var(--muted); font-size: .65rem; text-align: right; }
+.products { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-bottom: 52px; }
+.product { min-width: 0; overflow: hidden; border: 1px solid #d7e3f7; border-radius: 26px; background: #e5eefc; }
+.product:last-child { border-color: #d4e9dd; background: #e7f5ed; }
+.productImage { padding: 24px 24px 0; }
+.productImage img { display: block; width: 100%; height: auto; border: 1px solid #c9d9f1; border-radius: 14px; box-shadow: 0 8px 24px rgb(0 44 112 / 8%); }
+.productCopy { padding: 26px 30px 30px; }
+.productCopy h2 { margin: 12px 0; font-size: 1.6rem; line-height: 1.2; }
+.productCopy > p:not(:first-child) { margin: 0 0 20px; color: var(--muted); font-size: .9rem; line-height: 1.7; }
+.productCopy a { display: inline-flex; min-height: 44px; align-items: center; gap: 8px; color: var(--signal); font-size: .85rem; font-weight: 700; }
+.product:last-child .productCopy a { color: var(--digital); }
+@media (max-width: 960px) { .heroGrid { gap: 30px; } .hero .copy h1 { font-size: 2.55rem; } }
+@media (max-width: 960px) { .hero { padding-top: 36px; } .heroGrid { grid-template-columns: minmax(0, 1fr); } .hero .copy h1 { font-size: clamp(2.4rem, 7vw, 3.3rem); } .heroVisual { max-width: 680px; } .products { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 480px) { .hero { padding-bottom: 30px; } .copy > div { display: grid; } .miniPreview { width: 65%; margin-top: -24px; } .productImage { padding: 16px 16px 0; } .productCopy { padding: 22px; } }

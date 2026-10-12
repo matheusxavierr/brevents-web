@@ -1,0 +1,49 @@
+.page { min-height: 100vh; background: var(--canvas); padding: 56px max(16px, calc((100vw - 1240px) / 2)) 72px; }
+.hero { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); align-items: center; gap: clamp(24px, 5vw, 72px); }
+.heroCopy { min-width: 0; }
+.heroCopy h1 { margin: 18px 0 24px; font-size: clamp(2.4rem, 4.5vw, 4rem); line-height: 1.08; letter-spacing: -.04em; }
+.heroCopy > p:not(:first-child) { max-width: 580px; margin: 0 0 28px; color: var(--muted); font-size: 1.05rem; line-height: 1.8; }
+.accessNote { display: flex; align-items: center; gap: 7px; margin-top: 16px; color: var(--muted); font-size: .75rem; }
+.accessNote svg { flex-shrink: 0; color: var(--digital); }
+.demo { min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 24px; background: white; box-shadow: 0 20px 50px rgb(0 44 112 / 8%); }
+.demoTop { display: flex; align-items: center; gap: 5px; padding: 16px 20px; }
+.demoTop > span { display: inline-flex; flex: 1; align-items: center; gap: 6px; color: var(--muted); font-size: .65rem; }
+.demoTop i { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
+.demoCover { position: relative; overflow: hidden; display: grid; gap: 12px; background: linear-gradient(125deg, #002c70, #135bca); color: white; padding: 30px; }
+.demoCover::after { position: absolute; right: -90px; top: -45px; width: 290px; height: 290px; border: 45px solid rgb(255 255 255 / 6%); border-radius: 50%; content: ""; pointer-events: none; }
+.demoLogo { display: grid; width: 56px; height: 56px; place-items: center; border-radius: 16px; background: white; color: var(--signal); }
+.demoCover small { font-size: .65rem; letter-spacing: .1em; }
+.demoCover h2 { position: relative; z-index: 1; margin: 0; font-size: clamp(1.8rem, 3vw, 2.6rem); line-height: 1.1; }
+.demoContact { display: inline-flex; align-items: center; gap: 10px; justify-self: start; border-radius: 999px; background: #98e1b7; color: #133f2a; padding: 10px 16px; font-size: .7rem; font-weight: 700; }
+.demoOffers { padding: 24px; font-size: .85rem; }
+.demoOffers > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.demoOffers > div > span { display: grid; justify-items: center; gap: 9px; border-radius: 12px; background: var(--canvas); padding: 18px 6px; font-size: .65rem; }
+.demoFooter { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--line); padding: 18px 24px; color: var(--muted); font-size: .7rem; }
+.demoFooter svg { flex-shrink: 0; }
+.features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-top: 56px; }
+.features article { min-width: 0; border: 1px solid var(--line); border-radius: 22px; background: white; padding: 28px; }
+.features article > svg { color: var(--signal); }
+.features h2 { margin: 20px 0 12px; font-size: 1.15rem; line-height: 1.4; }
+.features p { margin: 0; color: var(--muted); font-size: .85rem; line-height: 1.8; }
+.steps { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 54px; padding: 64px 14px; }
+.steps h2 { max-width: 480px; margin: 12px 0; font-size: clamp(1.8rem, 3vw, 2.5rem); line-height: 1.2; }
+.steps ol { display: grid; gap: 22px; margin: 0; padding: 0; list-style: none; }
+.steps li { display: flex; align-items: flex-start; gap: 18px; }
+.steps li > span { display: grid; width: 42px; height: 42px; flex-shrink: 0; place-items: center; border-radius: 14px; background: white; color: var(--signal); font-size: .8rem; font-weight: 700; }
+.steps h3 { margin: 0 0 5px; font-size: 1rem; }
+.steps li p { margin: 0; color: var(--muted); font-size: .85rem; }
+.cta { display: flex; align-items: center; justify-content: space-between; gap: 30px; border: 1px solid var(--line); border-radius: 24px; background: white; padding: 32px; }
+.cta h2 { margin: 0 0 8px; font-size: 1.5rem; }
+.cta p { margin: 0; color: var(--muted); font-size: .85rem; }
+.cta > a { flex-shrink: 0; }
+@media (max-width: 960px) { .features { grid-template-columns: minmax(0, 1fr); gap: 12px; } .features article { padding: 24px; } .steps { gap: 24px; } }
+@media (max-width: 640px) {
+  .page { padding-top: 32px; }
+  .hero { grid-template-columns: minmax(0, 1fr); gap: 30px; }
+  .heroCopy h1 { font-size: clamp(2rem, 9vw, 3rem); }
+  .heroCopy > p:not(:first-child) { font-size: .9rem; }
+  .heroCopy > a { width: 100%; }
+  .features { margin-top: 30px; }
+  .steps { grid-template-columns: minmax(0, 1fr); padding: 40px 4px; }
+  .cta { flex-direction: column; align-items: stretch; gap: 20px; padding: 24px; }
+}

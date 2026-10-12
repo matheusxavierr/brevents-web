@@ -98,6 +98,7 @@ describe("header logado e salas de matchmaking", () => {
       zoom_session: null,
     };
     apiClientMock.mockImplementation((path: string) => {
+      if (path.startsWith("public/events/")) return Promise.resolve({ ...event, feature_flags: { networking_open: true } });
       if (path === "networking-presences/heartbeat/") {
         return Promise.resolve({ id: "p1", event: "e1", registration: "reg-1", registration_detail: { id: "reg-1", event: "e1", user: 7, email: user.email, name: user.name, status: "confirmed", ticket_code: "abc", profile: {}, created_at: "" }, last_seen_at: "" });
       }
@@ -110,7 +111,8 @@ describe("header logado e salas de matchmaking", () => {
 
     render(<SessionProvider initialUser={user}><NetworkingLobby event={event} /></SessionProvider>);
 
-    fireEvent.click(await screen.findByRole("button", { name: /Criar sala/i }));
+    fireEvent.click(await screen.findByRole("tab", { name: "Salas" }));
+    fireEvent.click(screen.getByRole("button", { name: /Criar sala/i }));
     const dialog = screen.getByRole("dialog", { name: /Criar sala da empresa/i });
     const company = within(dialog).getByPlaceholderText("Ex.: Acme Ltda.");
     expect(company).toBeRequired();
@@ -127,6 +129,6 @@ describe("header logado e salas de matchmaking", () => {
         body: expect.objectContaining({ event: "e1", company_name: "Acme", contact_name: "Ana Lima" }),
       }),
     );
-    expect(await screen.findByText(/Sala da Acme pronta/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Sala criada/i)).toBeInTheDocument();
   });
 });

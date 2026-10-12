@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ChevronLeft, ChevronUp, Copy, Maximize2, Mic, MicOff, Minimize2, MonitorUp, MonitorX, PhoneOff, Search, Settings, UserMinus, UserPlus, UserX, Users, Video, VideoOff, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronUp, Copy, LockKeyhole, Maximize2, Mic, MicOff, Minimize2, MonitorUp, MonitorX, PhoneOff, RotateCw, Search, Settings, UserMinus, UserPlus, UserX, Users, Video, VideoOff, X } from "lucide-react";
 import Link from "next/link";
 import { ApiError, apiClient } from "@/lib/api-client";
 import type { CaptionLanguage, LiveCaption, ParticipantDirectoryEntry, StageInvitation, ZoomJoinResponse, ZoomSession } from "@/lib/api-types";
 import { LiveCaptionControls } from "./live-caption-controls";
+import { useZoomCaptions } from "./use-zoom-captions";
 import { defaultMediaPreferences, MediaDeviceSetup, type MediaPreferences, type VirtualBackgroundMode } from "./media-device-setup";
 
 type ZoomModule = typeof import("@zoom/videosdk");
@@ -20,6 +21,8 @@ type ZoomPresenceResponse = { token: string; expires_in: number };
 
 const PARTICIPANTS_PER_PAGE = 9;
 const SHARE_PARTICIPANTS_PER_PAGE = 6;
+const TABLET_PARTICIPANTS_PER_PAGE = 6;
+const MOBILE_PARTICIPANTS_PER_PAGE = 4;
 
 function participantIdentity(participant: ZoomParticipant) {
   return String(participant.userKey ?? participant.userIdentity ?? "");
@@ -85,7 +88,6 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
   const participantTrigger = useRef<HTMLButtonElement>(null);
   const participantSearchInput = useRef<HTMLInputElement>(null);
   const selfIdentity = useRef("");
-  const captionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stopPreviewRef = useRef<(() => Promise<void>) | null>(null);
   const isHost = useRef(false);
   const [state, setState] = useState<"ready" | "joining" | "joined" | "left" | "removed" | "ended" | "duplicate">("ready");
@@ -112,8 +114,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
   const [participantDirectory, setParticipantDirectory] = useState<Record<string, ParticipantDirectoryEntry>>({});
   const [mediaRequest, setMediaRequest] = useState<MediaRequest | null>(null);
   const [moderationFeedback, setModerationFeedback] = useState<{ userId: number; control: MediaControl; message: string; failed: boolean } | null>(null);
-  const [captionLanguage, setCaptionLanguage] = useState<CaptionLanguage | null>(null);
-  const [liveCaption, setLiveCaption] = useState<LiveCaption | null>(null);
+  const [captionClient, setCaptionClient] = useState<ZoomClient | null>(null);
   const [activeRoomMode, setActiveRoomMode] = useState<"event" | "meeting">(roomMode);
   const [mediaPreferences, setMediaPreferences] = useState<MediaPreferences>(defaultMediaPreferences);
   const [deviceMenu, setDeviceMenu] = useState<"audio" | "video" | null>(null);
@@ -122,6 +123,20 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
   const [linkCopied, setLinkCopied] = useState(false);
   const [virtualBackgroundSupported, setVirtualBackgroundSupported] = useState(false);
   const [noiseSuppressionSupported, setNoiseSuppressionSupported] = useState(false);
+  const [viewportMode, setViewportMode] = useState<"desktop" | "tablet" | "mobile">("desktop");
+  const [participantPendingRemoval, setParticipantPendingRemoval] = useState<ZoomParticipant | null>(null);
+  const [removingParticipant, setRemovingParticipant] = useState(false);
+  const [leaveConfirmationOpen, setLeaveConfirmationOpen] = useState(false);
+
+  useEffect(() => {
+    const updateViewportMode = () => {
+      const width = window.innerWidth;
+      setViewportMode(width <= 640 ? "mobile" : width <= 960 ? "tablet" : "desktop");
+    };
+    updateViewportMode();
+    window.addEventListener("resize", updateViewportMode);
+    return () => window.removeEventListener("resize", updateViewportMode);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -156,7 +171,11 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
     });
   }, [deviceMenu]);
 
-  const participantPageSize = focus === "share" ? SHARE_PARTICIPANTS_PER_PAGE : PARTICIPANTS_PER_PAGE;
+  const participantPageSize = viewportMode === "mobile"
+    ? MOBILE_PARTICIPANTS_PER_PAGE
+    : viewportMode === "tablet"
+      ? TABLET_PARTICIPANTS_PER_PAGE
+      : focus === "share" ? SHARE_PARTICIPANTS_PER_PAGE : PARTICIPANTS_PER_PAGE;
 
   useEffect(() => {
     const pageCount = Math.max(1, Math.ceil(participants.length / participantPageSize));
@@ -182,27 +201,23 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
     };
   }, [deviceMenu]);
 
-  const publishTranscript = useCallback(async (text: string, sourceLanguage: CaptionLanguage) => {
-    const caption = guest
-      ? await fetch(`/api/guest/zoom/${session.id}/captions`, {
+  const saveTranscript = useCallback(async (text: string, sourceLanguage: CaptionLanguage, messageId: string) => {
+    if (guest) {
+      const response = await fetch(`/api/guest/zoom/${session.id}/captions`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ eventId, source_language: sourceLanguage, text }),
-        }).then(async (response) => {
-          const data = await response.json();
-          if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Não foi possível traduzir a fala.");
-          return data as LiveCaption;
-        })
-      : await apiClient<LiveCaption>(`zoom-sessions/${session.id}/captions/`, {
-          method: "POST",
-          body: { source_language: sourceLanguage, text },
+          body: JSON.stringify({ eventId, source_language: sourceLanguage, text, message_id: messageId }),
         });
-    const client = clientRef.current;
-    if (!client) return;
-    const result = await client.getCommandClient().send(JSON.stringify({ type: "caption.final", caption }));
-    ensureZoomSuccess(result);
-    onCaption?.(caption);
-  }, [eventId, guest, onCaption, session.id]);
+      if (!response.ok) throw new ApiError(response.status, await response.json().catch(() => null));
+      return;
+    }
+    await apiClient<LiveCaption>(`zoom-sessions/${session.id}/captions/`, {
+          method: "POST",
+          body: { source_language: sourceLanguage, text, message_id: messageId },
+        });
+  }, [eventId, guest, session.id]);
+
+  const captions = useZoomCaptions({ client: state === "joined" ? captionClient : null, sessionId: session.id, onCaption, saveTranscript });
 
   useEffect(() => {
     let thumbnailIndex = 0;
@@ -334,6 +349,10 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
       status.title = participant.muted ? "Microfone desligado" : "Microfone ligado";
     });
     const orderedTiles = nextParticipants.map((participant) => videoPlayers.current.get(participant.userId) ?? videoPlaceholders.current.get(participant.userId)).filter((tile): tile is HTMLElement => Boolean(tile));
+    const currentUserId = clientRef.current?.getCurrentUserInfo().userId;
+    orderedTiles.forEach((tile) => {
+      tile.dataset.zoomSelf = String(tile.dataset.zoomUserId === String(currentUserId));
+    });
     orderedTiles.forEach((tile, index) => {
       const currentTile = sdkContainer.children.item(index);
       if (currentTile !== tile) sdkContainer.insertBefore(tile, currentTile);
@@ -627,6 +646,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
       const initialParticipants = client.getAllUser();
       setParticipants(initialParticipants);
       setState("joined");
+      setCaptionClient(client);
       onJoinedChange?.(true);
       window.requestAnimationFrame(() => syncParticipantTiles(client.getAllUser()));
 
@@ -676,7 +696,6 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
           const command = JSON.parse(payload.text) as {
             type?: string;
             permissions?: ZoomJoinResponse["media_permissions"];
-            caption?: LiveCaption;
             control?: MediaControl;
           };
           const senderId = Number(payload.senderId);
@@ -737,16 +756,6 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
             setPermissions({ audio: false, video: false, screen_share: false });
             setOnStage(false);
             showMediaFeedback("Você saiu do palco", false);
-          }
-          if (
-            command.type === "caption.final"
-            && command.caption
-            && command.caption.speaker_identity !== selfIdentity.current
-          ) {
-            if (captionTimer.current) clearTimeout(captionTimer.current);
-            setLiveCaption(command.caption);
-            onCaption?.(command.caption);
-            captionTimer.current = setTimeout(() => setLiveCaption(null), 8_000);
           }
         } catch (commandError) {
           console.error("Não foi possível processar o comando de palco.", commandError);
@@ -915,6 +924,25 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
     showMediaFeedback("Câmera alterada", true);
   }
 
+  async function flipCamera() {
+    if (videoDevices.length < 2) {
+      showMediaFeedback("Não há outra câmera disponível", false);
+      return;
+    }
+    const currentIndex = videoDevices.findIndex((device) => device.deviceId === mediaPreferences.videoDeviceId);
+    const currentLabel = currentIndex >= 0 ? videoDevices[currentIndex].label.toLowerCase() : "";
+    const pointsToRear = /(back|rear|environment|traseira|posterior)/i.test(currentLabel);
+    const opposite = videoDevices.find((device) => {
+      const isRear = /(back|rear|environment|traseira|posterior)/i.test(device.label);
+      return pointsToRear ? !isRear : isRear;
+    });
+    const nextDevice = opposite?.deviceId !== mediaPreferences.videoDeviceId
+      ? opposite
+      : videoDevices[(currentIndex + 1 + videoDevices.length) % videoDevices.length];
+    if (!nextDevice) return;
+    await changeVideoDevice(nextDevice.deviceId);
+  }
+
   async function toggleNoiseSuppression() {
     const stream = streamRef.current;
     if (!stream || !noiseSuppressionSupported) {
@@ -946,6 +974,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
   }
 
   async function leave() {
+    setLeaveConfirmationOpen(false);
     const client = clientRef.current;
     if (heartbeatTimer.current) clearInterval(heartbeatTimer.current);
     heartbeatTimer.current = null;
@@ -955,8 +984,6 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
     participantSyncTimers.current = [];
     if (moderationFeedbackTimer.current) clearTimeout(moderationFeedbackTimer.current);
     moderationFeedbackTimer.current = null;
-    if (captionTimer.current) clearTimeout(captionTimer.current);
-    captionTimer.current = null;
     await releasePresence();
     if (isHost.current) {
       try { await apiClient(`zoom-sessions/${session.id}/end-live/`, { method: "POST" }); }
@@ -992,7 +1019,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
     setModerationFeedback(null);
     setFocus("grid");
     setParticipants([]);
-    setLiveCaption(null);
+    setCaptionClient(null);
     setState("left");
     onJoinedChange?.(false);
   }
@@ -1122,14 +1149,18 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
 
   async function removeParticipant(participant: ZoomParticipant) {
     const client = clientRef.current;
-    if (!client || !window.confirm(`Remover ${participant.displayName} da reunião?`)) return;
+    if (!client) return;
+    setRemovingParticipant(true);
     try {
       ensureZoomSuccess(await client.getCommandClient().send(JSON.stringify({ type: "meeting.removed" }), participant.userId));
       ensureZoomSuccess(await client.removeUser(participant.userId));
       showModerationFeedback(participant.userId, "audio", `${participant.displayName} foi removido da reunião.`);
+      setParticipantPendingRemoval(null);
     } catch (controlError) {
       console.error("Não foi possível remover o participante.", controlError);
       showModerationFeedback(participant.userId, "audio", "Falha ao remover o participante.", true);
+    } finally {
+      setRemovingParticipant(false);
     }
   }
 
@@ -1149,7 +1180,6 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
       if (participantDirectoryTimer.current) clearTimeout(participantDirectoryTimer.current);
       if (moderationFeedbackTimer.current) clearTimeout(moderationFeedbackTimer.current);
       if (feedbackTimer.current) clearTimeout(feedbackTimer.current);
-      if (captionTimer.current) clearTimeout(captionTimer.current);
       if (presenceHeartbeatTimer.current) clearInterval(presenceHeartbeatTimer.current);
       void audioContextRef.current?.close();
       if (isHost.current) {
@@ -1193,6 +1223,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
         <h1>{state === "left" ? "Você saiu da sala" : activeRoomMode === "meeting" ? "Tudo pronto para a reunião?" : "Entre no palco ao vivo"}</h1>
         <p>Escolha sua câmera e seu microfone. Você poderá trocar os dispositivos durante a chamada.</p>
         <MediaDeviceSetup value={mediaPreferences} onChange={setMediaPreferences} active={state !== "joining"} stopPreviewRef={stopPreviewRef} />
+        <div className="zoom-prejoin-chat-note"><LockKeyhole size={15} /><span>Chat e transcrição disponíveis ao entrar</span></div>
         <div className="zoom-capabilities" aria-label="Recursos da sala">
           <span><Video size={15} /> Live Meeting</span>
         </div>
@@ -1228,7 +1259,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
         <span className="live-dot" /> AO VIVO · {activeRoomMode === "meeting" ? role === "host" ? "ORGANIZADOR" : "PARTICIPANTE" : role === "host" ? "ORGANIZADOR" : onStage ? "NO PALCO" : role === "viewer" ? "ESPECTADOR" : "PLATEIA"}
         {role === "host"
           ? <div className="zoom-meeting-actions">{activeRoomMode === "meeting" ? <button type="button" className="zoom-event-settings" onClick={copyRoomLink}>{linkCopied ? <Check size={14} /> : <Copy size={14} />} {linkCopied ? "Link copiado" : "Compartilhar sala"}</button> : <a className="zoom-event-settings" href={`/painel?event=${encodeURIComponent(eventId)}&tab=settings`} target="_blank" rel="noopener noreferrer"><Settings size={14} /> Configurar evento</a>}<button ref={participantTrigger} type="button" className="zoom-participant-trigger" aria-expanded={participantPanelOpen} aria-controls="zoom-participant-directory" onClick={() => setParticipantPanelOpen((current) => !current)}><Users size={14} /> Participantes <strong>{audienceParticipants.length}</strong></button></div>
-          : activeRoomMode === "meeting" ? <div className="zoom-meeting-actions"><button type="button" className="zoom-event-settings" onClick={copyRoomLink}>{linkCopied ? <Check size={14} /> : <Copy size={14} />} {linkCopied ? "Link copiado" : "Compartilhar"}</button><button ref={participantTrigger} type="button" className="zoom-participant-trigger" aria-expanded={participantPanelOpen} aria-controls="zoom-participant-directory" onClick={() => setParticipantPanelOpen((current) => !current)}><Users size={14} /> Participantes <strong>{participants.length}</strong></button></div> : <span><Users size={14} /> {participants.length}</span>}
+          : <div className="zoom-meeting-actions"><button type="button" className="zoom-event-settings" onClick={copyRoomLink}>{linkCopied ? <Check size={14} /> : <Copy size={14} />} {linkCopied ? "Link copiado" : "Compartilhar"}</button><button ref={participantTrigger} type="button" className="zoom-participant-trigger" aria-expanded={participantPanelOpen} aria-controls="zoom-participant-directory" onClick={() => setParticipantPanelOpen((current) => !current)}><Users size={14} /> Participantes <strong>{participants.length}</strong></button></div>}
       </div>
       {participantPageCount > 1 && !shareMaximized && <nav className="zoom-pagination" aria-label="PÃ¡ginas de participantes">
         <button type="button" aria-label="Participantes anteriores" disabled={safeParticipantPage === 0} onClick={() => setParticipantPage((current) => Math.max(0, current - 1))}><ChevronLeft size={16} /></button>
@@ -1248,11 +1279,11 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
       </div>
       {stageInvite && <div className="stage-invite" role="dialog" aria-label="Convite para o palco"><strong>O organizador convidou você para o palco.</strong><span>Você decide se quer liberar microfone e câmera.</span><div><button type="button" className="button button-primary" onClick={acceptStageInvite}>Aceitar convite</button><button type="button" className="button button-secondary" onClick={() => setStageInvite(null)}>Agora não</button></div></div>}
       {mediaRequest && <div className="stage-invite" role="dialog" aria-label="Solicitação do organizador"><strong>Solicitação do organizador</strong><span>{mediaRequest.control === "audio" ? "Ligar seu microfone?" : mediaRequest.control === "video" ? "Ligar sua câmera?" : "Compartilhar sua tela?"}</span><div><button type="button" className="button button-primary" onClick={acceptMediaRequest}>Aceitar</button><button type="button" className="button button-secondary" onClick={() => setMediaRequest(null)}>Agora não</button></div></div>}
-      {captionLanguage && liveCaption?.translations[captionLanguage] && <div className="live-caption-overlay" aria-live="polite" aria-atomic="true">
-        <strong>{liveCaption.speaker_name}</strong>
-        <span dir="auto">{liveCaption.translations[captionLanguage]}</span>
+      {captions.captionLanguage && captions.overlay && <div className="live-caption-overlay" aria-live="polite" aria-atomic="true">
+        <strong>{captions.overlay.speaker}</strong>
+        <span dir="auto">{captions.overlay.text}</span>
       </div>}
-      {(role === "host" || activeRoomMode === "meeting") && participantPanelOpen && <aside id="zoom-participant-directory" className="zoom-participant-panel" role="dialog" aria-modal="false" aria-label={role === "host" ? "Gerenciar participantes" : "Participantes da reunião"}>
+      {participantPanelOpen && <aside id="zoom-participant-directory" className="zoom-participant-panel" role="dialog" aria-modal="false" aria-label={role === "host" ? "Gerenciar participantes" : "Participantes da reunião"}>
         <header>
           <div><strong>Participantes</strong><small>{directoryParticipants.length} conectados agora</small></div>
           <button type="button" className="zoom-panel-close" aria-label="Fechar participantes" onClick={() => { setParticipantPanelOpen(false); participantTrigger.current?.focus(); }}><X size={17} /></button>
@@ -1283,14 +1314,33 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
                 <button type="button" className={moderationFeedback?.userId === participant.userId && moderationFeedback.control === "audio" ? moderationFeedback.failed ? "control-failed" : "control-confirmed" : ""} onClick={() => controlParticipantAudio(participant)} disabled={!canModerateMedia} aria-label={participant.muted ? `Solicitar microfone de ${participant.displayName}` : `Mutar ${participant.displayName}`} title={participant.muted ? "Pedir para ligar microfone" : "Mutar participante"}>{participant.muted ? <Mic size={15} /> : <MicOff size={15} />}</button>
                 <button type="button" className={moderationFeedback?.userId === participant.userId && moderationFeedback.control === "video" ? moderationFeedback.failed ? "control-failed" : "control-confirmed" : ""} onClick={() => controlParticipantVideo(participant)} disabled={!canModerateMedia} aria-label={participant.bVideoOn ? `Desligar câmera de ${participant.displayName}` : `Solicitar câmera de ${participant.displayName}`} title={participant.bVideoOn ? "Desligar câmera" : "Pedir para ligar câmera"}>{participant.bVideoOn ? <VideoOff size={15} /> : <Video size={15} />}</button>
                 <button type="button" className={moderationFeedback?.userId === participant.userId && moderationFeedback.control === "share" ? moderationFeedback.failed ? "control-failed" : "control-confirmed" : ""} onClick={() => controlParticipantShare(participant)} disabled={!canModerateMedia} aria-label={participant.sharerOn ? `Interromper compartilhamento de ${participant.displayName}` : `Solicitar compartilhamento de ${participant.displayName}`} title={participant.sharerOn ? "Interromper compartilhamento" : "Pedir compartilhamento de tela"}>{participant.sharerOn ? <MonitorX size={15} /> : <MonitorUp size={15} />}</button>
-                {activeRoomMode === "meeting" && <button type="button" className="remove-participant" onClick={() => removeParticipant(participant)} aria-label={`Remover ${participant.displayName} da reunião`} title="Remover participante"><UserX size={15} /></button>}
+                <button type="button" className="remove-participant" onClick={() => setParticipantPendingRemoval(participant)} aria-label={`Remover ${participant.displayName}`} title={activeRoomMode === "meeting" ? "Remover participante" : "Remover do evento"}><UserX size={15} /></button>
               </div>}
             </div>;
           })}
           {visibleParticipants.length === 0 && <div className="zoom-participant-empty"><Search size={20} /><strong>Ninguém encontrado</strong><span>Tente outro nome ou e-mail.</span></div>}
         </div>
       </aside>}
+      {participantPendingRemoval && <div className="meeting-confirm-backdrop" role="presentation" onMouseDown={() => { if (!removingParticipant) setParticipantPendingRemoval(null); }}>
+        <section className="meeting-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="remove-participant-title" onMouseDown={(event) => event.stopPropagation()}>
+          <UserX size={24} aria-hidden="true" />
+          <p className="eyebrow">Remover participante</p>
+          <h2 id="remove-participant-title">Remover {participantPendingRemoval.displayName}?</h2>
+          <p>Essa pessoa sairá da reunião e poderá entrar novamente pelo link, se a sala ainda estiver aberta.</p>
+          <div className="meeting-confirm-actions"><button className="button button-secondary" type="button" disabled={removingParticipant} onClick={() => setParticipantPendingRemoval(null)}>Cancelar</button><button className="button button-danger" type="button" disabled={removingParticipant} onClick={() => void removeParticipant(participantPendingRemoval)}>{removingParticipant ? "Removendo…" : "Remover da reunião"}</button></div>
+        </section>
+      </div>}
+      {leaveConfirmationOpen && <div className="meeting-confirm-backdrop" role="presentation" onMouseDown={() => setLeaveConfirmationOpen(false)}>
+        <section className="meeting-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="leave-room-title" onMouseDown={(event) => event.stopPropagation()}>
+          <PhoneOff size={24} aria-hidden="true" />
+          <p className="eyebrow">Sair da sala</p>
+          <h2 id="leave-room-title">Deseja sair da reunião?</h2>
+          <p>Você poderá entrar novamente pelo link enquanto a reunião estiver aberta.</p>
+          <div className="meeting-confirm-actions"><button className="button button-secondary" type="button" onClick={() => setLeaveConfirmationOpen(false)}>Cancelar</button><button className="button button-danger" type="button" onClick={() => void leave()}>Sair da sala</button></div>
+        </section>
+      </div>}
       {mediaFeedback && <div className="zoom-media-feedback" key={mediaFeedback.id} role="status" aria-live="polite">{mediaFeedback.message}</div>}
+      {!mediaFeedback && captions.ready && captions.notice && <div className="zoom-media-feedback" role="status" aria-live="polite">Transcrição do Zoom ativa nesta sala</div>}
       <div className="zoom-controls" aria-label="Controles da reunião">
         {permissions.audio && <div className="zoom-control-combo">
           <button type="button" onClick={toggleAudio} className={`zoom-control-main ${audioOn ? "active" : "muted"}`} aria-label={audioOn ? "Desativar microfone" : "Ativar microfone"}>{audioOn ? <Mic size={19} /> : <MicOff size={19} />}<span>{audioOn ? "Microfone" : "Sem áudio"}</span></button>
@@ -1307,6 +1357,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
           {deviceMenu === "video" && <div className="zoom-media-menu" role="dialog" aria-label="Opções da câmera">
             <strong>Câmera</strong>
             <select value={mediaPreferences.videoDeviceId} onChange={(event) => void changeVideoDevice(event.target.value)}><option value="">Câmera padrão</option>{videoDevices.map((device, index) => <option value={device.deviceId} key={device.deviceId}>{device.label || `Câmera ${index + 1}`}</option>)}</select>
+            <button type="button" className="zoom-flip-camera" onClick={() => void flipCamera()} disabled={!videoOn || videoDevices.length < 2}><RotateCw size={15} /><span>Inverter câmera</span></button>
             <span className="zoom-menu-label">Fundo</span>
             <div className="zoom-background-options"><button type="button" className={mediaPreferences.virtualBackgroundMode === "none" ? "selected" : ""} disabled={!virtualBackgroundSupported} onClick={() => void changeVirtualBackground("none")}>Sem efeito</button><button type="button" className={mediaPreferences.virtualBackgroundMode === "blur" ? "selected" : ""} disabled={!virtualBackgroundSupported} onClick={() => void changeVirtualBackground("blur")}>Desfocar</button></div>
           </div>}
@@ -1315,11 +1366,17 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
         <LiveCaptionControls
           canSpeak={permissions.audio}
           microphoneOn={audioOn}
-          captionLanguage={captionLanguage}
-          onCaptionLanguageChange={setCaptionLanguage}
-          onTranscript={publishTranscript}
+          captionLanguage={captions.captionLanguage}
+          spokenLanguage={captions.spokenLanguage}
+          onCaptionLanguageChange={captions.selectCaptionLanguage}
+          onSpokenLanguageChange={captions.selectSpokenLanguage}
+          availableLanguages={captions.availableLanguages}
+          translationLanguages={captions.translationLanguages}
+          ready={captions.ready}
+          error={captions.error}
+          onRetry={captions.retry}
         />
-        <button type="button" onClick={leave} className="danger"><PhoneOff size={19} /><span>Sair</span></button>
+        <button type="button" onClick={() => setLeaveConfirmationOpen(true)} className="danger"><PhoneOff size={19} /><span>Sair</span></button>
       </div>
     </div>
   );

@@ -1,17 +1,37 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { Building2, ExternalLink, ImageIcon, LoaderCircle, Plus, Save, Share2 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
-import type { Organization, Paginated } from "@/lib/api-types";
+import type { CompanyShowcaseItem, Organization, Paginated } from "@/lib/api-types";
+import { normalizeShowcasePrice } from "@/lib/company-showcase";
+import { CompanyHubView } from "./company-hub-view";
+import { CompanyShowcaseEditor } from "./company-showcase-editor";
 
 const EMPTY_BRANDING = { primary_color: "#135BCA", accent_color: "#24824F" };
+
+function getHubFormValues(form: HTMLFormElement, branding: Organization["branding"]) {
+  const data = Object.fromEntries(new FormData(form)) as Record<string, string>;
+  return {
+    name: data.name,
+    slug: data.slug,
+    headline: data.headline,
+    description: data.description,
+    logo_url: data.logo_url,
+    cover_image_url: data.cover_image_url,
+    contact_email: data.contact_email,
+    contact_phone: data.contact_phone,
+    website_url: data.website_url,
+    social_links: { instagram: data.instagram, linkedin: data.linkedin, youtube: data.youtube },
+    branding: { ...branding, primary_color: data.primary_color, accent_color: data.accent_color },
+  };
+}
 
 export function CompanyHubAdmin() {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [activeId, setActiveId] = useState("");
+  const [draft, setDraft] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
@@ -20,6 +40,22 @@ export function CompanyHubAdmin() {
     () => organizations.find((organization) => organization.id === activeId) ?? null,
     [activeId, organizations],
   );
+
+  function updatePreview(formEvent: FormEvent<HTMLFormElement>) {
+    if (!active) return;
+    const values = getHubFormValues(formEvent.currentTarget, active.branding);
+    setDraft((current) => ({
+      ...(current?.id === active.id ? current : active),
+      ...values,
+    }));
+    setNotice("");
+  }
+
+  function updateShowcase(items: CompanyShowcaseItem[]) {
+    if (!active) return;
+    setDraft((current) => ({ ...(current?.id === active.id ? current : active), showcase_items: items }));
+    setNotice("");
+  }
 
   useEffect(() => {
     let activeRequest = true;
@@ -70,33 +106,20 @@ export function CompanyHubAdmin() {
   async function saveHub(formEvent: FormEvent<HTMLFormElement>) {
     formEvent.preventDefault();
     if (!active) return;
-    const data = Object.fromEntries(new FormData(formEvent.currentTarget));
+    const data = getHubFormValues(formEvent.currentTarget, active.branding);
     setSaving(true); setError("");
     try {
       const updated = await apiClient<Organization>(`organizations/${active.id}/`, {
         method: "PATCH",
         body: {
-          name: data.name,
-          slug: data.slug,
-          headline: data.headline,
-          description: data.description,
-          logo_url: data.logo_url,
-          cover_image_url: data.cover_image_url,
-          contact_email: data.contact_email,
-          contact_phone: data.contact_phone,
-          website_url: data.website_url,
-          social_links: {
-            instagram: data.instagram,
-            linkedin: data.linkedin,
-            youtube: data.youtube,
-          },
-          branding: {
-            primary_color: data.primary_color,
-            accent_color: data.accent_color,
-          },
+          ...data,
+          showcase_items: ((draft?.id === active.id ? draft : active).showcase_items ?? []).map((item) => (
+            item.price === undefined ? item : { ...item, price: normalizeShowcasePrice(item.price) }
+          )),
         },
       });
       setOrganizations((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setDraft(null);
       setNotice("Página da empresa atualizada.");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Não foi possível salvar o hub.");
@@ -108,11 +131,12 @@ export function CompanyHubAdmin() {
   return <div className="company-hub-admin">
     <header className="hub-admin-heading">
       <div><p className="eyebrow"><Building2 size={14} /> Hub das empresas</p><h2>Sua empresa dentro do BR Events.</h2><p>Uma página permanente, com estrutura padrão e a identidade da sua marca.</p></div>
-      {organizations.length > 0 && <label className="event-switcher"><span className="sr-only">Empresa atual</span><select value={activeId} onChange={(event) => setActiveId(event.target.value)}>{organizations.map((organization) => <option value={organization.id} key={organization.id}>{organization.name}</option>)}</select></label>}
+      {active && <span className="hub-company-badge"><Building2 size={18} aria-hidden="true" /> {active.name}</span>}
     </header>
+    {organizations.length > 1 && <nav className="hub-company-tabs" aria-label="Seus hubs">{organizations.map((organization) => <button type="button" key={organization.id} aria-pressed={activeId === organization.id} onClick={() => { setActiveId(organization.id); setDraft(null); setNotice(""); }}>{organization.name}</button>)}</nav>}
     {error && <p className="form-error" role="alert">{error}</p>}{notice && <p className="form-success">{notice}</p>}
     {!active ? <section className="dashboard-card hub-first-step"><Building2 size={32} /><div><h3>Crie a página da sua empresa</h3><p>Você poderá alterar imagens, texto, contatos, redes sociais e cores.</p><small className="required-note">* Campo obrigatório</small></div><form className="compact-form" onSubmit={createHub}><label className="field"><span>Nome da empresa <b aria-hidden="true">*</b></span><input name="name" placeholder="Ex.: Minha Empresa" required aria-required="true" /></label><label className="field"><span>Frase principal <small>Opcional</small></span><input name="headline" placeholder="Uma frase sobre a empresa" /></label><label className="field"><span>História da empresa <small>Opcional</small></span><textarea name="description" placeholder="Conte brevemente a história da empresa" /></label><button className="button button-primary" disabled={saving}><Plus size={16} /> Criar hub</button></form></section> : <div className="hub-editor-grid">
-      <form className="dashboard-card compact-form hub-editor-form" onSubmit={saveHub} key={active.id}>
+      <form className="dashboard-card compact-form hub-editor-form" onSubmit={saveHub} onChange={updatePreview} key={active.id}>
         <div className="card-header"><div><p className="eyebrow">Personalização</p><h2>Conteúdo da página</h2></div><Link className="button button-secondary" href={`/empresas/${active.slug}`} target="_blank">Ver página <ExternalLink size={15} /></Link></div>
         <p className="required-note">* Campos obrigatórios</p><div className="form-grid"><label className="field"><span>Nome <b aria-hidden="true">*</b></span><input name="name" defaultValue={active.name} required aria-required="true" /></label><label className="field"><span>Endereço da página <b aria-hidden="true">*</b></span><input name="slug" defaultValue={active.slug} required aria-required="true" /></label></div>
         <label className="field"><span>Frase principal</span><input name="headline" defaultValue={active.headline} placeholder="Uma ideia forte sobre a empresa" /></label>
@@ -121,17 +145,13 @@ export function CompanyHubAdmin() {
         <div className="form-grid"><label className="field"><span>E-mail</span><input name="contact_email" type="email" defaultValue={active.contact_email} /></label><label className="field"><span>Telefone</span><input name="contact_phone" defaultValue={active.contact_phone} /></label></div>
         <label className="field"><span>Site</span><input name="website_url" type="url" defaultValue={active.website_url} /></label>
         <div className="form-grid"><label className="field"><span><Share2 size={14} /> Instagram</span><input name="instagram" type="url" defaultValue={active.social_links?.instagram} /></label><label className="field"><span>LinkedIn</span><input name="linkedin" type="url" defaultValue={active.social_links?.linkedin} /></label><label className="field"><span>YouTube</span><input name="youtube" type="url" defaultValue={active.social_links?.youtube} /></label></div>
-        <div className="form-grid hub-color-fields"><label className="field"><span>Cor principal</span><input name="primary_color" type="color" defaultValue={active.branding?.primary_color || EMPTY_BRANDING.primary_color} /></label><label className="field"><span>Cor de apoio</span><input name="accent_color" type="color" defaultValue={active.branding?.accent_color || EMPTY_BRANDING.accent_color} /></label></div>
+        <div className="form-grid hub-color-fields"><label className="field"><span>Cor principal</span><input name="primary_color" type="color" defaultValue={active.branding?.primary_color || EMPTY_BRANDING.primary_color} /><small>Capa, identidade e bloco de contato.</small></label><label className="field"><span>Cor de apoio</span><input name="accent_color" type="color" defaultValue={active.branding?.accent_color || EMPTY_BRANDING.accent_color} /><small>Botões e detalhes de destaque.</small></label></div>
+        <CompanyShowcaseEditor items={(draft?.id === active.id ? draft : active).showcase_items ?? []} onChange={updateShowcase} disabled={saving} />
         <button className="button button-primary" disabled={saving}>{saving ? <LoaderCircle className="spin" size={16} /> : <Save size={16} />} Salvar personalização</button>
       </form>
-      <HubPreview organization={active} />
+      <aside className="hub-flyer-preview"><div className="hub-preview-heading"><span className="eyebrow">Prévia ao vivo</span><p>Veja suas alterações aqui. Salve para publicar na página da empresa.</p></div><CompanyHubView organization={draft?.id === active.id ? draft : active} preview /></aside>
     </div>}
   </div>;
-}
-
-function HubPreview({ organization }: { organization: Organization }) {
-  const primary = organization.branding?.primary_color || EMPTY_BRANDING.primary_color;
-  return <aside className="dashboard-card hub-live-preview" style={{ "--hub-primary": primary } as React.CSSProperties}><span className="eyebrow">Prévia da estrutura</span><div className="hub-preview-cover" style={organization.cover_image_url ? { backgroundImage: `url(${organization.cover_image_url})` } : undefined}>{organization.logo_url ? <Image src={organization.logo_url} alt="" width={70} height={70} unoptimized /> : <span>{organization.name.slice(0, 2).toUpperCase()}</span>}</div><h2>{organization.headline || organization.name}</h2><p>{organization.description || "A apresentação da empresa aparecerá aqui."}</p><div className="hub-preview-meta"><span>Sobre</span><span>Eventos</span><span>Contato</span></div></aside>;
 }
 
 function slugify(value: string) {

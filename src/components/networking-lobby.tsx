@@ -2,102 +2,168 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Building2, Check, Clock3, DoorOpen, Handshake, LoaderCircle, MessageSquare, Search, UserRound, UsersRound, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { ArrowLeft, ArrowRight, Building2, Check, ChevronLeft, ChevronRight, DoorOpen, Handshake, Inbox, LoaderCircle, LockKeyhole, MessageSquare, Radio, RefreshCw, Search, Send, UsersRound, X } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
-import type { EventData, NetworkingPresence, NetworkingRequest, Paginated, Room } from "@/lib/api-types";
+import { listAll } from "@/lib/api-pagination";
+import { networkingPageLayout } from "@/lib/networking-layout";
+import type { EventData, NetworkingPresence, NetworkingRequest, Registration, Room } from "@/lib/api-types";
+import { Dialog } from "./event-dashboard/shared";
 import { HomeHeader } from "./home-header";
 import { useSession } from "./session-provider";
+import portal from "./event-portal.module.css";
+import styles from "./networking-lobby.module.css";
 
+type View = "people" | "salas" | "received" | "sent" | "active";
+type Snapshot = { open: boolean; people: NetworkingPresence[]; requests: NetworkingRequest[]; rooms: Room[]; ownRegistrationId: string };
 type SalaForm = { company_name: string; contact_name: string; location: string; topic: string };
-
+const titles: Record<View, string> = { people: "Pessoas no networking", salas: "Salas das empresas", received: "Convites recebidos", sent: "Convites enviados", active: "Sua conversa 1:1" };
+const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 const EMPTY_SALA: SalaForm = { company_name: "", contact_name: "", location: "", topic: "" };
 
 export function NetworkingLobby({ event }: { event: EventData }) {
   const router = useRouter();
   const { user } = useSession();
-  const [people, setPeople] = useState<NetworkingPresence[]>([]);
-  const [requests, setRequests] = useState<NetworkingRequest[]>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [ownRegistrationId, setOwnRegistrationId] = useState("");
+  const [snapshot, setSnapshot] = useState<Snapshot>({ open: event.feature_flags.networking_open === true, people: [], requests: [], rooms: [], ownRegistrationId: "" });
+  const [view, setView] = useState<View>("people");
+  const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
   const [target, setTarget] = useState<NetworkingPresence | null>(null);
+  const [ending, setEnding] = useState<NetworkingRequest | null>(null);
   const [topic, setTopic] = useState("");
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
+  const [connectionError, setConnectionError] = useState("");
+  const [notice, setNotice] = useState("");
   const [salaOpen, setSalaOpen] = useState(false);
   const [salaForm, setSalaForm] = useState<SalaForm>(EMPTY_SALA);
   const [salaError, setSalaError] = useState("");
-  const [salaNotice, setSalaNotice] = useState("");
   const [salaWorking, setSalaWorking] = useState(false);
+  const [layout, setLayout] = useState(() => networkingPageLayout(1000, 400));
+  const viewport = useRef<HTMLDivElement>(null);
+  const mounted = useRef(false);
+  const generation = useRef(0);
+  const operationRunning = useRef(false);
+  const presenceJoined = useRef(false);
 
   const refresh = useCallback(async () => {
-    const ownPresence = await apiClient<NetworkingPresence>("networking-presences/heartbeat/", { method: "POST", body: { event: event.id } });
-    setOwnRegistrationId(ownPresence.registration);
-    const [online, invitationPage, roomPage] = await Promise.all([
-      apiClient<NetworkingPresence[]>(`networking-presences/online/?event=${event.id}`),
-      apiClient<Paginated<NetworkingRequest>>(`networking-requests/?event=${event.id}`),
-      apiClient<Paginated<Room>>(`rooms/?event=${event.id}&purpose=networking&visibility=public`),
+    const current = ++generation.current;
+    const publicEvent = await apiClient<EventData>(`public/events/${encodeURIComponent(event.slug)}/`);
+    const open = publicEvent.feature_flags.networking_open === true;
+    const [pending, accepted, ownPresence, rooms] = await Promise.all([
+      listAll<NetworkingRequest>(`networking-requests/?event=${event.id}&status=pending`),
+      listAll<NetworkingRequest>(`networking-requests/?event=${event.id}&status=accepted`),
+      open ? apiClient<NetworkingPresence>("networking-presences/heartbeat/", { method: "POST", body: { event: event.id } }) : Promise.resolve(null),
+      listAll<Room>(`rooms/?event=${event.id}&purpose=networking&visibility=public`),
     ]);
-    setPeople(online);
-    setRequests(invitationPage.results);
-    setRooms(roomPage.results);
-  }, [event.id]);
+    if (ownPresence) presenceJoined.current = true;
+    const people = open ? await apiClient<NetworkingPresence[]>(`networking-presences/online/?event=${event.id}`) : [];
+    const requests = [...pending, ...accepted].sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")));
+    const isOwn = (person: Registration) => person.user === user?.id || Boolean(user?.email && normalize(person.email || "") === normalize(user.email));
+    const ownRequest = requests.find((request) => [request.sender_detail, request.recipient_detail].some(isOwn));
+    const ownRegistrationId = ownPresence?.registration ?? (ownRequest
+      ? isOwn(ownRequest.sender_detail) ? ownRequest.sender_registration : ownRequest.recipient_registration
+      : "");
+    if (mounted.current && current === generation.current) {
+      setSnapshot({ open, people, requests, rooms, ownRegistrationId });
+      setConnectionError("");
+    }
+  }, [event.id, event.slug, user]);
 
   useEffect(() => {
-    let active = true;
-    async function start() {
-      try {
-        if (!user) { router.replace(`/entrar?next=${encodeURIComponent(window.location.pathname)}`); return; }
-        if (!active) return;
-        await refresh();
-      } catch (reason) {
-        setError(reason instanceof Error ? reason.message : "Não foi possível abrir o networking.");
-      } finally { if (active) setLoading(false); }
-    }
-    void start();
-    const interval = window.setInterval(() => void refresh().catch(() => undefined), 5000);
-    return () => { active = false; window.clearInterval(interval); void apiClient("networking-presences/leave/", { method: "POST", body: { event: event.id } }).catch(() => undefined); };
+    if (!user) { router.replace(`/entrar?next=${encodeURIComponent(window.location.pathname)}`); return; }
+    mounted.current = true;
+    let stopped = false;
+    let polling = false;
+    const poll = async () => {
+      if (stopped || polling || operationRunning.current) return;
+      polling = true;
+      try { await refresh(); }
+      catch (reason) { if (!stopped) setConnectionError(reason instanceof Error ? reason.message : "Não foi possível atualizar o networking."); }
+      finally { polling = false; if (!stopped) setLoading(false); }
+    };
+    void poll();
+    const interval = window.setInterval(() => void poll(), 5000);
+    return () => {
+      stopped = true; mounted.current = false; generation.current += 1; window.clearInterval(interval);
+      if (presenceJoined.current) void apiClient("networking-presences/leave/", { method: "POST", body: { event: event.id } }).catch(() => undefined);
+    };
   }, [event.id, refresh, router, user]);
 
-  const filtered = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    return query ? people.filter((presence) => `${presence.registration_detail.name} ${presence.registration_detail.email}`.toLowerCase().includes(query)) : people;
-  }, [people, search]);
-  const sortedRooms = useMemo(() => [...rooms].sort((a, b) => {
-    const mineA = a.host_registration && a.host_registration === ownRegistrationId ? 0 : 1;
-    const mineB = b.host_registration && b.host_registration === ownRegistrationId ? 0 : 1;
+  useEffect(() => {
+    const element = viewport.current;
+    if (!element) return;
+    const update = () => {
+      const size = element.getBoundingClientRect();
+      const computed = window.getComputedStyle(element);
+      const width = size.width - parseFloat(computed.paddingLeft) - parseFloat(computed.paddingRight);
+      const height = size.height - parseFloat(computed.paddingTop) - parseFloat(computed.paddingBottom);
+      if (width > 0 && height > 0) setLayout(networkingPageLayout(width, height));
+    };
+    const frame = window.requestAnimationFrame(update);
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
+    observer?.observe(element);
+    window.addEventListener("resize", update);
+    return () => { window.cancelAnimationFrame(frame); observer?.disconnect(); window.removeEventListener("resize", update); };
+  }, []);
+
+  const incoming = snapshot.requests.filter((request) => request.status === "pending" && request.recipient_registration === snapshot.ownRegistrationId);
+  const outgoing = snapshot.requests.filter((request) => request.status === "pending" && request.sender_registration === snapshot.ownRegistrationId);
+  const active = snapshot.requests.filter((request) => request.status === "accepted");
+  const hasConversation = active.length > 0;
+  const people = snapshot.people.filter(({ registration_detail: person }) => normalize(`${person.name} ${person.email} ${person.profile?.company ?? ""} ${person.profile?.role ?? ""}`).includes(normalize(search)));
+  const rooms = [...snapshot.rooms].sort((a, b) => {
+    const mineA = a.host_registration && a.host_registration === snapshot.ownRegistrationId ? 0 : 1;
+    const mineB = b.host_registration && b.host_registration === snapshot.ownRegistrationId ? 0 : 1;
     if (mineA !== mineB) return mineA - mineB;
     return (a.company_name || a.name).localeCompare(b.company_name || b.name, "pt-BR");
-  }), [ownRegistrationId, rooms]);
-  const incoming = requests.filter((request) => request.status === "pending" && request.recipient_registration === ownRegistrationId);
-  const outgoing = requests.filter((request) => request.status === "pending" && request.sender_registration === ownRegistrationId);
-  const activeConversations = requests.filter((request) => request.status === "accepted");
-  const hasActiveConversation = activeConversations.length > 0;
+  });
+  const items = view === "people" ? people : view === "salas" ? rooms : view === "received" ? incoming : view === "sent" ? outgoing : active;
+  const pageCount = Math.max(1, Math.ceil(items.length / layout.pageSize));
+  const safePage = Math.min(page, pageCount - 1);
+  const counts: Record<View, number> = { people: snapshot.people.length, salas: snapshot.rooms.length, received: incoming.length, sent: outgoing.length, active: active.length };
+  const visiblePeople = people.slice(safePage * layout.pageSize, (safePage + 1) * layout.pageSize);
+  const visibleRooms = rooms.slice(safePage * layout.pageSize, (safePage + 1) * layout.pageSize);
+  const visibleRequests = (view === "received" ? incoming : view === "sent" ? outgoing : active).slice(safePage * layout.pageSize, (safePage + 1) * layout.pageSize);
+  const pendingFor = (registrationId: string) => snapshot.requests.some((request) => request.status === "pending" && (request.sender_registration === registrationId || request.recipient_registration === registrationId));
+  const targetAvailable = !!target && snapshot.people.some((person) => person.registration === target.registration);
 
-  async function sendInvitation() {
-    if (!target) return;
-    setWorking(true); setError("");
+  function changeView(next: View) { setView(next); setPage(0); setError(""); setNotice(""); }
+
+  async function run(path: string, body: unknown, message: string) {
+    if (operationRunning.current) return false;
+    operationRunning.current = true; generation.current += 1;
+    setWorking(true); setError(""); setNotice("");
     try {
-      await apiClient("networking-requests/", { method: "POST", body: { event: event.id, recipient_registration: target.registration, topic } });
-      setTarget(null); setTopic(""); await refresh();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Não foi possível enviar o convite."); }
-    finally { setWorking(false); }
+      const updated = await apiClient<NetworkingRequest>(path, { method: "POST", ...(body === undefined ? {} : { body }) });
+      if (!mounted.current) return true;
+      if (updated?.id) setSnapshot((previous) => ({ ...previous, requests: [
+        ...previous.requests.filter((request) => request.id !== updated.id),
+        ...(["pending", "accepted"].includes(updated.status) ? [updated] : []),
+      ] }));
+      setNotice(message);
+      try { await refresh(); }
+      catch (reason) { if (mounted.current) setConnectionError(reason instanceof Error ? reason.message : "A ação foi salva, mas a atualização falhou."); }
+      return true;
+    } catch (reason) { if (mounted.current) setError(reason instanceof Error ? reason.message : "Não foi possível concluir a ação."); return false; }
+    finally { operationRunning.current = false; if (mounted.current) setWorking(false); }
+  }
+
+  async function sendInvitation(formEvent: FormEvent<HTMLFormElement>) {
+    formEvent.preventDefault();
+    if (!target || !snapshot.open || hasConversation || !targetAvailable || pendingFor(target.registration)) return;
+    if (await run("networking-requests/", { event: event.id, recipient_registration: target.registration, topic: topic.trim() }, "Convite enviado. A pessoa decide se quer conversar.")) {
+      setTarget(null); setTopic("");
+    }
   }
 
   async function respond(request: NetworkingRequest, action: "accept" | "decline" | "cancel") {
-    setWorking(true); setError("");
-    try { await apiClient(`networking-requests/${request.id}/${action}/`, { method: "POST" }); await refresh(); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : "Não foi possível responder ao convite."); }
-    finally { setWorking(false); }
-  }
-
-  async function endConversation(request: NetworkingRequest) {
-    setWorking(true); setError("");
-    try { await apiClient(`networking-requests/${request.id}/end/`, { method: "POST" }); await refresh(); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : "Não foi possível sair da conversa."); }
-    finally { setWorking(false); }
+    if (action === "accept" && (!snapshot.open || hasConversation)) return;
+    if (await run(`networking-requests/${request.id}/${action}/`, undefined, action === "accept" ? "Convite aceito. Sua conversa está pronta." : action === "decline" ? "Convite recusado." : "Convite cancelado.")) {
+      if (action === "accept") { setView("active"); setPage(0); }
+    }
   }
 
   function openSalaDialog() {
@@ -106,87 +172,74 @@ export function NetworkingLobby({ event }: { event: EventData }) {
     setSalaOpen(true);
   }
 
-  async function createSala() {
+  async function createSala(formEvent: FormEvent<HTMLFormElement>) {
+    formEvent.preventDefault();
     const company = salaForm.company_name.trim();
     const contact = salaForm.contact_name.trim();
     if (!company) { setSalaError("Informe o nome da empresa."); return; }
     if (!contact) { setSalaError("Informe o seu nome."); return; }
-    setSalaWorking(true); setSalaError(""); setSalaNotice("");
+    if (operationRunning.current) return;
+    operationRunning.current = true; generation.current += 1;
+    setSalaWorking(true); setSalaError(""); setNotice("");
     try {
       const created = await apiClient<Room>("rooms/networking/", {
         method: "POST",
-        body: {
-          event: event.id,
-          company_name: company,
-          contact_name: contact,
-          location: salaForm.location.trim(),
-          topic: salaForm.topic.trim(),
-        },
+        body: { event: event.id, company_name: company, contact_name: contact, location: salaForm.location.trim(), topic: salaForm.topic.trim() },
       });
-      setRooms((current) => [...current.filter((room) => room.id !== created.id), created]);
+      if (!mounted.current) return;
+      setSnapshot((previous) => ({ ...previous, rooms: [...previous.rooms.filter((room) => room.id !== created.id), created] }));
       setSalaOpen(false);
-      setSalaNotice(`Sala da ${created.company_name || created.name} pronta. Abra a sua sala para receber visitas.`);
-      await refresh();
+      setNotice("Sala criada. Abra a sua sala para receber visitas.");
+      try { await refresh(); }
+      catch (reason) { if (mounted.current) setConnectionError(reason instanceof Error ? reason.message : "A sala foi criada, mas a atualização falhou."); }
     } catch (reason) {
-      setSalaError(reason instanceof Error ? reason.message : "Não foi possível criar a sala.");
-    } finally {
-      setSalaWorking(false);
-    }
+      if (mounted.current) setSalaError(reason instanceof Error ? reason.message : "Não foi possível criar a sala.");
+    } finally { operationRunning.current = false; if (mounted.current) setSalaWorking(false); }
   }
 
-  return <><HomeHeader /><main className="networking-page">
-    <div className="networking-context-header"><div><span>{event.name}</span><strong>Rodada de negócios</strong></div><Link className="button button-secondary" href={`/eventos/${event.slug}/lobby`}><ArrowLeft size={15} /> Lobby</Link></div>
-    <section className="networking-hero"><div><p className="eyebrow"><UsersRound size={14} /> Pessoas no evento agora</p><h1>Encontre alguém.<br />Converse em particular.</h1><p>Envie um convite, entre na sala de uma empresa ou crie a sua sala para receber visitas no matchmaking.</p></div><span className="online-counter"><i /> {people.length + 1} online</span></section>
-    {error && <p className="form-error networking-error" role="alert">{error}</p>}
-    {loading ? <div className="networking-loading"><LoaderCircle className="spin" /><span>Entrando no lobby…</span></div> : <>
-      <section className="networking-salas">
-        <div className="networking-section-heading">
-          <div><h2>Salas das empresas</h2><p>Crie a sala da sua empresa, com seu nome e localização, e receba visitas no matchmaking.</p></div>
-          <button className="button button-primary" type="button" onClick={openSalaDialog}><DoorOpen size={16} /> Criar sala</button>
-        </div>
-        {salaNotice && <p className="networking-notice" role="status">{salaNotice}</p>}
-        <div className="networking-sala-grid">
-          {sortedRooms.map((room) => {
-            const mine = Boolean(room.host_registration && room.host_registration === ownRegistrationId);
-            return <article className={mine ? "networking-sala networking-sala-mine" : "networking-sala"} key={room.id}>
-              <span className="networking-avatar">{initials(room.company_name || room.name)}</span>
-              <div>
-                <strong>{room.company_name || room.name}</strong>
-                <small>{room.contact_name || "Participante"}{room.location ? ` · ${room.location}` : ""}</small>
-                {room.description && <small className="networking-sala-topic">{room.description}</small>}
-                <span><i /> Sala aberta</span>
-              </div>
-              {mine && <span className="status-pill status-live">Sua sala</span>}
-              <Link className="button button-primary" href={`/eventos/${event.slug}/networking/salas/${room.id}`}>{mine ? "Abrir minha sala" : "Entrar na sala"}</Link>
+  return <div className={portal.portal}><HomeHeader /><main className={styles.main}>
+    <div className={portal.context}><div><small>RODADAS DE NEGÓCIOS</small><strong>{event.name}</strong></div><Link className={portal.back} href={`/eventos/${event.slug}/lobby`}><ArrowLeft size={15} /> Voltar ao lobby</Link></div>
+    <section className={styles.intro}><div><h1>Encontre pessoas. Comece uma conversa.</h1><p>Envie um convite, entre na sala de uma empresa ou crie a sala da sua empresa para receber visitas.</p></div><span className={`${portal.badge} ${snapshot.open ? portal.open : ""}`}><i className={styles.statusDot} />{snapshot.open ? "Rodadas abertas" : "Fechadas pelo organizador"}</span></section>
+    <nav className={styles.tabs} aria-label="Networking" role="tablist">{(["people", "salas", "received", "sent", "active"] as View[]).map((item) => {
+      const Icon = item === "people" ? UsersRound : item === "salas" ? Building2 : item === "received" ? Inbox : item === "sent" ? Send : MessageSquare;
+      const label = item === "people" ? "Pessoas" : item === "salas" ? "Salas" : item === "received" ? "Recebidos" : item === "sent" ? "Enviados" : "Conversa 1:1";
+      return <button type="button" key={item} role="tab" aria-label={label} aria-selected={view === item} aria-controls="networking-results" className={view === item ? styles.selected : ""} onClick={() => changeView(item)}><Icon size={15} />{item === "active" ? <><span className={styles.desktopLabel}>{label}</span><span className={styles.mobileLabel}>1:1</span></> : label}<span className={styles.tabCount}>{counts[item] > 99 ? "99+" : counts[item]}</span></button>;
+    })}</nav>
+    {(connectionError || (error && !target && !ending && !salaOpen) || notice) && <div className={`${styles.feedback} ${connectionError || error ? styles.error : ""}`} role={connectionError || error ? "alert" : "status"}><span>{connectionError || error || notice}</span>{connectionError ? <button type="button" aria-label="Tentar atualizar" disabled={working} onClick={() => void refresh().catch(() => undefined)}><RefreshCw size={15} /></button> : <button type="button" aria-label="Fechar mensagem" onClick={() => { setError(""); setNotice(""); }}><X size={15} /></button>}</div>}
+    <section className={styles.panel} id="networking-results" role="tabpanel" aria-label={titles[view]} aria-busy={loading || working || salaWorking}>
+      <header className={styles.toolbar}><div><h2>{titles[view]}</h2><p>{view === "salas" ? snapshot.open ? "Crie a sala da sua empresa, com seu nome e localização, e receba visitas no matchmaking." : "As rodadas estão fechadas; as salas abertas continuam acessíveis." : hasConversation ? "Você tem um 1:1 ativo. Saia dele para iniciar outra conversa." : view === "people" ? "Veja quem está por aqui e encontre pontos em comum." : view === "received" ? "Você escolhe qual convite quer aceitar." : view === "sent" ? "Acompanhe os convites que aguardam resposta." : "Os convites aceitos aparecem aqui."}</p></div>{view === "people" && snapshot.open && <label className={styles.search}><Search size={16} /><input type="search" aria-label="Buscar pessoas no networking" placeholder="Nome, empresa, cargo ou e-mail" value={search} onChange={(change) => { setSearch(change.target.value); setPage(0); }} /></label>}{view === "salas" && <button className={portal.primary} type="button" disabled={working || salaWorking || !snapshot.open} onClick={openSalaDialog}><DoorOpen size={15} /> {snapshot.open ? "Criar sala" : "Rodadas fechadas"}</button>}</header>
+      <div ref={viewport} className={`${styles.viewport} ${layout.compact ? styles.compact : ""}`} role="region" aria-label="Resultados do networking">
+        {loading ? <div className={styles.empty}><LoaderCircle size={26} className="spin" /><p>Encontrando as pessoas no evento…</p></div> : view === "salas" ? (!snapshot.open && !visibleRooms.length ? <div className={styles.empty}><LockKeyhole size={32} /><h2>As rodadas estão fechadas.</h2><p>O organizador libera as salas durante o evento. Você pode voltar ao auditório ou continuar um 1:1 já aceito na aba Conversa 1:1.</p><Link className={portal.secondary} href={`/eventos/${event.slug}/lobby`}>Voltar ao lobby <ArrowRight size={16} /></Link></div> : !visibleRooms.length ? <div className={styles.empty}><Building2 size={30} /><h2>Nenhuma sala aberta ainda.</h2><p>{snapshot.open ? "Crie a primeira sala com o nome da sua empresa e o seu nome." : "Assim que o organizador abrir as rodadas, as salas das empresas aparecem aqui."}</p></div> : <div className={styles.grid} style={{ "--network-columns": layout.columns, "--network-rows": layout.rows } as CSSProperties}>
+          {visibleRooms.map((room) => {
+            const mine = Boolean(room.host_registration && room.host_registration === snapshot.ownRegistrationId);
+            return <article className={styles.card} key={room.id}>
+              <div className={styles.identity}><span className={styles.avatar}>{initials(room.company_name || room.name)}</span><div><strong className={styles.name} title={room.company_name || room.name}>{room.company_name || room.name}</strong><span className={styles.role} title={[room.contact_name, room.location].filter(Boolean).join(" · ")}>{[room.contact_name, room.location].filter(Boolean).join(" · ") || "Participante do evento"}</span></div></div>
+              {room.description && <p className={styles.topic} title={room.description}>{room.description}</p>}
+              <div className={styles.cardMeta}>{mine ? "Sua sala neste evento" : "Sala aberta para visitas"}</div>
+              <div className={styles.actions}><Link className={styles.actionPrimary} href={`/eventos/${event.slug}/networking/salas/${room.id}`}>{mine ? "Abrir minha sala" : "Entrar na sala"} <ArrowRight size={14} /></Link></div>
             </article>;
           })}
-          {sortedRooms.length === 0 && <div className="networking-empty"><Building2 size={30} /><h3>Nenhuma sala aberta ainda.</h3><p>Crie a primeira sala com o nome da sua empresa e o seu nome.</p></div>}
-        </div>
-      </section>
-      <div className="networking-layout">
-        <section className="networking-directory"><div className="networking-section-heading"><div><h2>Disponíveis para conversar</h2><p>{hasActiveConversation ? "Saia da conversa atual para enviar ou aceitar outro convite." : "O lobby é atualizado em tempo real."}</p></div><label className="networking-search"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nome ou e-mail" /></label></div><div className="networking-person-grid">{filtered.map((presence) => <article key={presence.id}><span className="networking-avatar">{initials(presence.registration_detail.name)}</span><div><strong>{presence.registration_detail.name}</strong><small>{presence.registration_detail.email}</small><span><i /> Disponível</span></div><button className="button button-primary" disabled={hasActiveConversation} onClick={() => setTarget(presence)}><Handshake size={15} /> {hasActiveConversation ? "Em conversa" : "Convidar"}</button></article>)}{filtered.length === 0 && <div className="networking-empty"><UserRound size={30} /><h3>Ninguém disponível agora.</h3><p>Continue no lobby; novas pessoas aparecerão automaticamente.</p></div>}</div></section>
-        <aside className="networking-invitations"><h2>Suas conversas</h2>{activeConversations.map((request) => <ConversationCard request={request} event={event} ownRegistrationId={ownRegistrationId} working={working} onEnd={() => void endConversation(request)} key={request.id} />)}{incoming.map((request) => <article className="invitation-card incoming" key={request.id}><small>Convite recebido</small><strong>{request.sender_detail.name}</strong><p>{request.topic || "Quer conversar com você em particular."}</p><div><button className="button button-primary" disabled={working || hasActiveConversation} onClick={() => void respond(request, "accept")}><Check size={15} /> {hasActiveConversation ? "Indisponível" : "Aceitar"}</button><button className="icon-button" disabled={working} onClick={() => void respond(request, "decline")} aria-label="Recusar"><X size={16} /></button></div></article>)}{outgoing.map((request) => <article className="invitation-card pending" key={request.id}><small><Clock3 size={12} /> Aguardando resposta</small><strong>{request.recipient_detail.name}</strong><p>{request.topic || "Convite para conversar."}</p><button className="button button-quiet" disabled={working} onClick={() => void respond(request, "cancel")}>Cancelar convite</button></article>)}{!activeConversations.length && !incoming.length && !outgoing.length && <div className="networking-aside-empty"><MessageSquare size={25} /><p>Você pode receber vários convites e escolher qual aceitar.</p></div>}</aside>
+        </div>) : view === "people" && !snapshot.open ? <div className={styles.empty}><LockKeyhole size={32} /><h2>As rodadas estão fechadas.</h2><p>Aguarde a liberação do organizador. Você pode voltar ao auditório ou continuar um 1:1 já aceito na aba Conversa 1:1.</p><Link className={portal.secondary} href={`/eventos/${event.slug}/lobby`}>Voltar ao lobby <ArrowRight size={16} /></Link></div> : !items.length ? <div className={styles.empty}>{view === "people" ? <UsersRound size={30} /> : <MessageSquare size={30} />}<h2>{view === "people" ? search ? "Nenhuma pessoa encontrada." : "Ninguém no networking agora." : view === "received" ? "Nenhum convite recebido por enquanto." : view === "sent" ? "Você não tem convites aguardando resposta." : "Você ainda não tem uma conversa ativa."}</h2><p>{view === "people" ? search ? "Tente buscar outro nome, empresa ou cargo." : "Continue aqui: as pessoas aparecem automaticamente ao entrar neste espaço." : view === "active" ? "Aceite um convite recebido ou encontre alguém na aba Pessoas." : "Use a aba Pessoas para começar uma conexão."}</p>{view !== "people" && <button className={portal.secondary} type="button" onClick={() => changeView("people")}>Encontrar pessoas</button>}</div> : <div className={styles.grid} style={{ "--network-columns": layout.columns, "--network-rows": layout.rows } as CSSProperties}>
+          {view === "people" ? visiblePeople.map((presence) => <article className={styles.card} key={presence.id}><PersonIdentity person={presence.registration_detail} /><span className={styles.email} title={presence.registration_detail.email}>{presence.registration_detail.email}</span><div className={styles.cardMeta}><span><i className={styles.statusDot} /> Online no networking</span></div><div className={styles.actions}><button type="button" className={styles.actionPrimary} disabled={working || hasConversation || pendingFor(presence.registration)} onClick={() => { setTarget(presence); setTopic(""); setError(""); }}><Handshake size={14} />{hasConversation ? "Você está em um 1:1" : pendingFor(presence.registration) ? "Convite pendente" : "Convidar para conversar"}</button></div></article>)
+            : visibleRequests.map((request) => {
+              const person = request.sender_registration === snapshot.ownRegistrationId ? request.recipient_detail : request.sender_detail;
+              return <article className={styles.card} key={request.id}><PersonIdentity person={person} /><p className={styles.topic} title={request.topic}>{request.topic || (view === "received" ? "Quer conversar com você em particular." : view === "sent" ? "Convite para uma conversa de negócios." : "Sua sala privada está pronta.")}</p><div className={styles.cardMeta}>{view === "active" ? "Conversa 1:1 ativa" : view === "received" ? "Convite recebido" : "Aguardando resposta"}</div><div className={styles.actions}>
+                {view === "active" ? <><Link className={styles.actionPrimary} href={`/eventos/${event.slug}/networking/${request.id}`}>Entrar na conversa <ArrowRight size={14} /></Link><button type="button" className={styles.actionDanger} disabled={working} onClick={() => { setEnding(request); setError(""); }}>Sair do 1:1</button></>
+                  : view === "received" ? <><button type="button" className={styles.actionPrimary} disabled={working || hasConversation || !snapshot.open} onClick={() => void respond(request, "accept")}><Check size={14} />{!snapshot.open ? "Rodadas fechadas" : hasConversation ? "1:1 ativo" : "Aceitar"}</button><button type="button" disabled={working} onClick={() => void respond(request, "decline")}>Recusar</button></>
+                    : <button type="button" disabled={working} onClick={() => void respond(request, "cancel")}>Cancelar convite</button>}
+              </div></article>;
+            })}
+        </div>}
       </div>
-    </>}
-    {target && <div className="networking-dialog-backdrop" role="presentation" onMouseDown={() => setTarget(null)}><section className="networking-dialog" role="dialog" aria-modal="true" aria-labelledby="networking-dialog-title" onMouseDown={(event) => event.stopPropagation()}><button className="icon-button" onClick={() => setTarget(null)} aria-label="Fechar"><X size={17} /></button><span className="networking-avatar">{initials(target.registration_detail.name)}</span><p className="eyebrow">Convite 1:1</p><h2 id="networking-dialog-title">Conversar com {target.registration_detail.name}?</h2><p>A sala será criada somente depois que a pessoa aceitar.</p><label className="field"><span>Sobre o que você quer conversar? (opcional)</span><textarea value={topic} onChange={(event) => setTopic(event.target.value)} maxLength={180} placeholder="Ex.: parceria comercial, produto, projeto…" /></label><button className="button button-primary" disabled={working} onClick={() => void sendInvitation()}>{working ? <LoaderCircle className="spin" size={16} /> : <Handshake size={16} />} Enviar convite</button></section></div>}
-    {salaOpen && <div className="networking-dialog-backdrop" role="presentation" onMouseDown={() => setSalaOpen(false)}><section className="networking-dialog" role="dialog" aria-modal="true" aria-labelledby="sala-dialog-title" onMouseDown={(event) => event.stopPropagation()}>
-      <button className="icon-button" type="button" onClick={() => setSalaOpen(false)} aria-label="Fechar"><X size={17} /></button>
-      <p className="eyebrow">Sala de matchmaking</p>
-      <h2 id="sala-dialog-title">Criar sala da empresa</h2>
-      <p>A sala fica visível para todos os inscritos no evento. Nome e empresa são obrigatórios.</p>
-      <label className="field"><span>Nome da empresa <b>*</b></span><input value={salaForm.company_name} onChange={(event) => setSalaForm((current) => ({ ...current, company_name: event.target.value }))} maxLength={120} placeholder="Ex.: Acme Ltda." required /></label>
-      <label className="field"><span>Seu nome <b>*</b></span><input value={salaForm.contact_name} onChange={(event) => setSalaForm((current) => ({ ...current, contact_name: event.target.value }))} maxLength={120} placeholder="Ex.: Ana Lima" required /></label>
-      <label className="field"><span>Localização <small>Opcional</small></span><input value={salaForm.location} onChange={(event) => setSalaForm((current) => ({ ...current, location: event.target.value }))} maxLength={120} placeholder="Ex.: São Paulo, SP" /></label>
-      <label className="field"><span>Assunto <small>Opcional</small></span><input value={salaForm.topic} onChange={(event) => setSalaForm((current) => ({ ...current, topic: event.target.value }))} maxLength={180} placeholder="Ex.: Parcerias comerciais" /></label>
-      {salaError && <p className="form-error" role="alert">{salaError}</p>}
-      <button className="button button-primary" type="button" disabled={salaWorking} onClick={() => void createSala()}>{salaWorking ? <LoaderCircle className="spin" size={16} /> : <DoorOpen size={16} />} Criar sala</button>
-    </section></div>}
-  </main></>;
+      <footer className={styles.pagination}><span>{view === "people" && !snapshot.open ? "Novos convites indisponíveis" : `${items.length} ${view === "people" ? "pessoas" : view === "salas" ? "salas" : "conversas"} · ${layout.pageSize} por página`}</span><div><button type="button" aria-label="Página anterior" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}><ChevronLeft size={16} /></button><span>{safePage + 1} / {pageCount}</span><button type="button" aria-label="Próxima página" disabled={safePage >= pageCount - 1} onClick={() => setPage(safePage + 1)}><ChevronRight size={16} /></button></div></footer>
+    </section>
+    <footer className={portal.footer}><span>BR Events · Conexões deste evento</span><span className={styles.statusText}><Radio size={11} /> Atualização a cada 5 segundos</span></footer>
+    {target && <Dialog title={`Conversar com ${target.registration_detail.name}?`} busy={working} onClose={() => setTarget(null)}><form className={styles.form} onSubmit={sendInvitation}><PersonIdentity person={target.registration_detail} /><p>{target.registration_detail.email}</p><p>A sala privada será criada quando a pessoa aceitar seu convite.</p>{(!snapshot.open || !targetAvailable) && <div className={styles.feedback}>{!snapshot.open ? "O organizador fechou as rodadas. Aguarde a abertura." : "Esta pessoa saiu do networking."}</div>}{error && <div className={`${styles.feedback} ${styles.error}`} role="alert">{error}</div>}<label className={styles.field}>Sobre o que você quer conversar? (opcional)<textarea value={topic} onChange={(change) => setTopic(change.target.value)} maxLength={180} placeholder="Uma parceria, produto, projeto ou ideia…" /></label><div className={styles.formActions}><button className={portal.secondary} type="button" disabled={working} onClick={() => setTarget(null)}>Cancelar</button><button className={portal.primary} disabled={working || !snapshot.open || !targetAvailable || hasConversation || pendingFor(target.registration)}>{working ? "Enviando…" : "Enviar convite"}</button></div></form></Dialog>}
+    {salaOpen && <Dialog title="Criar sala da empresa" busy={salaWorking} onClose={() => setSalaOpen(false)}><form className={styles.form} onSubmit={createSala}><p>A sala fica visível para todos os inscritos no evento. Nome e empresa são obrigatórios.</p><label className={styles.field}>Nome da empresa *<input value={salaForm.company_name} onChange={(change) => setSalaForm((current) => ({ ...current, company_name: change.target.value }))} maxLength={120} placeholder="Ex.: Acme Ltda." required /></label><label className={styles.field}>Seu nome *<input value={salaForm.contact_name} onChange={(change) => setSalaForm((current) => ({ ...current, contact_name: change.target.value }))} maxLength={120} placeholder="Ex.: Ana Lima" required /></label><label className={styles.field}>Localização (opcional)<input value={salaForm.location} onChange={(change) => setSalaForm((current) => ({ ...current, location: change.target.value }))} maxLength={120} placeholder="Ex.: São Paulo, SP" /></label><label className={styles.field}>Assunto (opcional)<input value={salaForm.topic} onChange={(change) => setSalaForm((current) => ({ ...current, topic: change.target.value }))} maxLength={180} placeholder="Ex.: Parcerias comerciais" /></label>{salaError && <div className={`${styles.feedback} ${styles.error}`} role="alert">{salaError}</div>}{!snapshot.open && <div className={styles.feedback}>O organizador fechou as rodadas. Aguarde a abertura para criar a sala.</div>}<div className={styles.formActions}><button className={portal.secondary} type="button" disabled={salaWorking} onClick={() => setSalaOpen(false)}>Cancelar</button><button className={portal.primary} disabled={salaWorking || !snapshot.open}>{salaWorking ? "Criando…" : "Criar sala"}</button></div></form></Dialog>}
+    {ending && <Dialog title="Sair desta conversa 1:1?" busy={working} onClose={() => setEnding(null)}><p>Esta conversa será encerrada para os dois participantes. Depois você poderá enviar e aceitar outros convites.</p>{error && <div className={`${styles.feedback} ${styles.error}`} role="alert">{error}</div>}<div className={styles.formActions}><button className={portal.secondary} disabled={working} onClick={() => setEnding(null)}>Continuar no 1:1</button><button className={portal.primary} disabled={working} onClick={async () => { if (await run(`networking-requests/${ending.id}/end/`, undefined, "Conversa encerrada. Você pode iniciar novas conexões.")) { setEnding(null); setView("people"); setPage(0); } }}>Confirmar saída</button></div></Dialog>}
+  </main></div>;
 }
 
-function ConversationCard({ request, event, ownRegistrationId, working, onEnd }: { request: NetworkingRequest; event: EventData; ownRegistrationId: string; working: boolean; onEnd: () => void }) {
-  const other = request.sender_registration === ownRegistrationId ? request.recipient_detail : request.sender_detail;
-  return <article className="invitation-card active"><small><i /> 1:1 ativo</small><strong>{other.name}</strong><p>{request.topic || "Conversa de networking"}</p><div className="networking-active-actions"><Link className="button button-primary" href={`/eventos/${event.slug}/networking/${request.id}`}>Entrar na conversa</Link><button className="button button-secondary" type="button" disabled={working} onClick={onEnd}>Sair do 1:1</button></div></article>;
+function PersonIdentity({ person }: { person: Registration }) {
+  return <div className={styles.identity}><span className={styles.avatar}>{initials(person.name)}</span><div><strong className={styles.name} title={person.name}>{person.name}</strong><span className={styles.role} title={[person.profile?.company, person.profile?.role].filter(Boolean).join(" · ")}>{[person.profile?.company, person.profile?.role].filter(Boolean).join(" · ") || "Participante do evento"}</span></div></div>;
 }
-
-function initials(name: string) { return name.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase(); }

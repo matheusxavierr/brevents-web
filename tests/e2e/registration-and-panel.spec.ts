@@ -13,10 +13,12 @@ test("cadastro conclui e redireciona para a página inicial", async ({ page }) =
   await page.getByLabel("E-mail").fill("pessoa@example.com");
   await page.getByLabel("Senha").fill("senha-teste-123");
   await page.getByRole("button", { name: "Criar minha conta" }).click();
-  await expect(page).toHaveURL("http://127.0.0.1:3001/");
+  await expect(page).toHaveURL(/\/$/);
 });
 
 test("organizador adiciona palestrante pelo painel e recebe confirmação", async ({ page }) => {
+  test.skip(!process.env.E2E_ORGANIZER_ACCESS, "Defina E2E_ORGANIZER_ACCESS com um token do organizador do ambiente de teste.");
+  await page.context().addCookies([{ name: "brevents_access", value: process.env.E2E_ORGANIZER_ACCESS!, url: process.env.E2E_BASE_URL ?? "http://127.0.0.1:3001", httpOnly: true }]);
   let speakerCreated = false;
   const event = {
     id: "event-1", name: "Evento E2E", slug: "evento-e2e", description: "Teste", timezone: "America/Sao_Paulo",
@@ -41,10 +43,12 @@ test("organizador adiciona palestrante pelo painel e recebe confirmação", asyn
 
   await page.goto("/painel");
   await page.getByRole("button", { name: /Programação/i }).click();
+  await page.getByRole("button", { name: "Palestrantes (0)" }).click();
+  await page.getByRole("button", { name: "Adicionar palestrante", exact: true }).click();
   await page.getByPlaceholder("Nome").fill("Marina Costa");
   await page.getByPlaceholder("E-mail").fill("marina@example.com");
   await page.getByPlaceholder("Mini bio").fill("Produto");
-  await page.getByRole("button", { name: "Adicionar palestrante" }).click();
+  await page.getByRole("dialog", { name: "Adicionar palestrante" }).getByRole("button", { name: "Adicionar palestrante" }).click();
   await expect(page.getByText("Palestrante adicionado.")).toBeVisible();
   expect(speakerCreated).toBe(true);
 });
