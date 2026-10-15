@@ -163,7 +163,7 @@ export function HomeHeader() {
                 <span className="avatar">{user.first_name?.slice(0, 1) || "U"}</span>
                 <span>{user.name || user.username}</span>
               </button>
-              {user.account_type === "organizer" && <Link className="button button-secondary" href="/painel">Meu painel</Link>}
+              {(user.account_type === "organizer" || user.can_manage_events) && <Link className="button button-secondary" href="/painel">Meu painel</Link>}
               {user.is_superuser && <Link className="button button-primary" href="/admin">Admin</Link>}
               <button className="home-logout" type="button" onClick={logout} aria-label="Sair da conta">
                 <LogOut size={17} />
@@ -186,13 +186,13 @@ export function HomeHeader() {
             <h2 id="profile-title">{user.name || user.username}</h2>
             <dl>
               <div><dt><Mail size={15} /> E-mail</dt><dd>{user.email}</dd></div>
-              <div><dt><ShieldCheck size={15} /> Perfil</dt><dd>{user.account_type === "organizer" ? "Organizador" : "Participante"}</dd></div>
+              <div><dt><ShieldCheck size={15} /> Perfil</dt><dd>{user.account_type === "organizer" ? "Organizador" : user.can_manage_events ? "Coordenador de evento" : "Participante"}</dd></div>
             </dl>
             <div className="profile-modal-actions">
               <Link className="button button-secondary" href="/hub" onClick={() => setProfileOpen(false)}>Hub da empresa</Link>
               <Link className="button button-secondary" href="/meus-eventos" onClick={() => setProfileOpen(false)}>Meus eventos</Link>
               <Link className="button button-secondary" href="/meetings/novo" onClick={() => setProfileOpen(false)}>Criar meeting</Link>
-              {user.account_type === "organizer" && <Link className="button button-primary" href="/painel" onClick={() => setProfileOpen(false)}>Meu painel</Link>}
+              {(user.account_type === "organizer" || user.can_manage_events) && <Link className="button button-primary" href="/painel" onClick={() => setProfileOpen(false)}>Meu painel</Link>}
             </div>
           </section>
         </div>

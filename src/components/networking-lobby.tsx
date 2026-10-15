@@ -7,6 +7,7 @@ import { ArrowLeft, ArrowRight, Building2, Check, ChevronLeft, ChevronRight, Doo
 import { apiClient } from "@/lib/api-client";
 import { listAll } from "@/lib/api-pagination";
 import { networkingPageLayout } from "@/lib/networking-layout";
+import { isOwnCompanyRoom } from "@/lib/company-rooms";
 import type { EventData, NetworkingPresence, NetworkingRequest, Registration, Room } from "@/lib/api-types";
 import { Dialog } from "./event-dashboard/shared";
 import { HomeHeader } from "./home-header";
@@ -15,7 +16,7 @@ import portal from "./event-portal.module.css";
 import styles from "./networking-lobby.module.css";
 
 type View = "people" | "salas" | "received" | "sent" | "active";
-type Snapshot = { open: boolean; people: NetworkingPresence[]; requests: NetworkingRequest[]; rooms: Room[]; ownRegistrationId: string };
+type Snapshot = { open: boolean; people: NetworkingPresence[]; requests: NetworkingRequest[]; rooms: Room[]; ownRegistrationId: string; ownCompany: string };
 type SalaForm = { company_name: string; contact_name: string; location: string; topic: string };
 const titles: Record<View, string> = { people: "Pessoas no networking", salas: "Salas das empresas", received: "Convites recebidos", sent: "Convites enviados", active: "Sua conversa 1:1" };
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
@@ -25,7 +26,7 @@ const EMPTY_SALA: SalaForm = { company_name: "", contact_name: "", location: "",
 export function NetworkingLobby({ event }: { event: EventData }) {
   const router = useRouter();
   const { user } = useSession();
-  const [snapshot, setSnapshot] = useState<Snapshot>({ open: event.feature_flags.networking_open === true, people: [], requests: [], rooms: [], ownRegistrationId: "" });
+  const [snapshot, setSnapshot] = useState<Snapshot>({ open: event.feature_flags.networking_open === true, people: [], requests: [], rooms: [], ownRegistrationId: "", ownCompany: "" });
   const [view, setView] = useState<View>("people");
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
@@ -47,6 +48,7 @@ export function NetworkingLobby({ event }: { event: EventData }) {
   const generation = useRef(0);
   const operationRunning = useRef(false);
   const presenceJoined = useRef(false);
+  const initialViewSelected = useRef(false);
 
   const refresh = useCallback(async () => {
     const current = ++generation.current;
@@ -67,7 +69,14 @@ export function NetworkingLobby({ event }: { event: EventData }) {
       ? isOwn(ownRequest.sender_detail) ? ownRequest.sender_registration : ownRequest.recipient_registration
       : "");
     if (mounted.current && current === generation.current) {
-      setSnapshot({ open, people, requests, rooms, ownRegistrationId });
+      const ownPerson = ownPresence?.registration_detail || people.find((person) => isOwn(person.registration_detail))?.registration_detail
+        || (ownRequest ? isOwn(ownRequest.sender_detail) ? ownRequest.sender_detail : ownRequest.recipient_detail : undefined);
+      const ownCompany = ownPerson?.profile?.company || "";
+      setSnapshot({ open, people, requests, rooms, ownRegistrationId, ownCompany });
+      if (!initialViewSelected.current) {
+        initialViewSelected.current = true;
+        if (rooms.some((room) => isOwnCompanyRoom(room, ownRegistrationId, ownCompany))) setView("salas");
+      }
       setConnectionError("");
     }
   }, [event.id, event.slug, user]);
@@ -115,8 +124,8 @@ export function NetworkingLobby({ event }: { event: EventData }) {
   const hasConversation = active.length > 0;
   const people = snapshot.people.filter(({ registration_detail: person }) => normalize(`${person.name} ${person.email} ${person.profile?.company ?? ""} ${person.profile?.role ?? ""}`).includes(normalize(search)));
   const rooms = [...snapshot.rooms].sort((a, b) => {
-    const mineA = a.host_registration && a.host_registration === snapshot.ownRegistrationId ? 0 : 1;
-    const mineB = b.host_registration && b.host_registration === snapshot.ownRegistrationId ? 0 : 1;
+    const mineA = isOwnCompanyRoom(a, snapshot.ownRegistrationId, snapshot.ownCompany) ? 0 : 1;
+    const mineB = isOwnCompanyRoom(b, snapshot.ownRegistrationId, snapshot.ownCompany) ? 0 : 1;
     if (mineA !== mineB) return mineA - mineB;
     return (a.company_name || a.name).localeCompare(b.company_name || b.name, "pt-BR");
   });
@@ -168,7 +177,7 @@ export function NetworkingLobby({ event }: { event: EventData }) {
 
   function openSalaDialog() {
     setSalaError("");
-    setSalaForm((current) => ({ ...current, contact_name: current.contact_name || user?.name || "" }));
+    setSalaForm((current) => ({ ...current, company_name: current.company_name || snapshot.ownCompany, contact_name: current.contact_name || user?.name || "" }));
     setSalaOpen(true);
   }
 
@@ -211,7 +220,7 @@ export function NetworkingLobby({ event }: { event: EventData }) {
       <div ref={viewport} className={`${styles.viewport} ${layout.compact ? styles.compact : ""}`} role="region" aria-label="Resultados do networking">
         {loading ? <div className={styles.empty}><LoaderCircle size={26} className="spin" /><p>Encontrando as pessoas no evento…</p></div> : view === "salas" ? (!snapshot.open && !visibleRooms.length ? <div className={styles.empty}><LockKeyhole size={32} /><h2>As rodadas estão fechadas.</h2><p>O organizador libera as salas durante o evento. Você pode voltar ao auditório ou continuar um 1:1 já aceito na aba Conversa 1:1.</p><Link className={portal.secondary} href={`/eventos/${event.slug}/lobby`}>Voltar ao lobby <ArrowRight size={16} /></Link></div> : !visibleRooms.length ? <div className={styles.empty}><Building2 size={30} /><h2>Nenhuma sala aberta ainda.</h2><p>{snapshot.open ? "Crie a primeira sala com o nome da sua empresa e o seu nome." : "Assim que o organizador abrir as rodadas, as salas das empresas aparecem aqui."}</p></div> : <div className={styles.grid} style={{ "--network-columns": layout.columns, "--network-rows": layout.rows } as CSSProperties}>
           {visibleRooms.map((room) => {
-            const mine = Boolean(room.host_registration && room.host_registration === snapshot.ownRegistrationId);
+            const mine = isOwnCompanyRoom(room, snapshot.ownRegistrationId, snapshot.ownCompany);
             return <article className={styles.card} key={room.id}>
               <div className={styles.identity}><span className={styles.avatar}>{initials(room.company_name || room.name)}</span><div><strong className={styles.name} title={room.company_name || room.name}>{room.company_name || room.name}</strong><span className={styles.role} title={[room.contact_name, room.location].filter(Boolean).join(" · ")}>{[room.contact_name, room.location].filter(Boolean).join(" · ") || "Participante do evento"}</span></div></div>
               {room.description && <p className={styles.topic} title={room.description}>{room.description}</p>}

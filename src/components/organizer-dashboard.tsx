@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BarChart3, CalendarDays, Check, ChevronDown, ExternalLink, Film, LayoutDashboard, LogOut, MessageSquare, Plus, Radio, RefreshCw, Settings, Users } from "lucide-react";
+import { BarChart3, Building2, CalendarDays, Check, ChevronDown, ExternalLink, Film, LayoutDashboard, LogOut, MessageSquare, Plus, Radio, RefreshCw, Settings, Users } from "lucide-react";
 import { Brand } from "./brand";
 import { useSession } from "./session-provider";
 import { apiClient } from "@/lib/api-client";
@@ -12,15 +12,19 @@ import { AgendaPanel } from "./event-dashboard/agenda-panel";
 import { InteractionsPanel } from "./event-dashboard/interactions-panel";
 import { AnalyticsPanel } from "./event-dashboard/analytics-panel";
 import { ParticipantsPanel, SettingsPanel, TransmissionPanel } from "./event-dashboard/management-panels";
+import { CoordinatorsPanel } from "./event-dashboard/coordinators-panel";
+import { CompanyRoomsPanel } from "./event-dashboard/company-rooms-panel";
 import { dateTime, duration, Empty, listAll, mainRoom, Metric, type DashboardAction } from "./event-dashboard/shared";
 import styles from "./event-dashboard/dashboard.module.css";
 
-type Tab = "overview" | "agenda" | "stream" | "participants" | "interactions" | "analytics" | "settings";
+type Tab = "overview" | "agenda" | "stream" | "company-rooms" | "participants" | "coordinators" | "interactions" | "analytics" | "settings";
 const navigation = [
   { id: "overview", label: "Visão geral", icon: LayoutDashboard },
   { id: "agenda", label: "Programação", icon: CalendarDays },
   { id: "stream", label: "Auditório e rodadas", icon: Radio },
+  { id: "company-rooms", label: "Salas das empresas", icon: Building2 },
   { id: "participants", label: "Participantes", icon: Users },
+  { id: "coordinators", label: "Coordenadores", icon: Users },
   { id: "interactions", label: "Interações", icon: MessageSquare },
   { id: "analytics", label: "Resultados", icon: BarChart3 },
   { id: "settings", label: "Configurações", icon: Settings },
@@ -30,6 +34,8 @@ const descriptions: Record<Tab, string> = {
   stream: "O palco principal e as conversas de negócios deste evento.", participants: "Inscrições, informações profissionais e controle de acesso.",
   interactions: "Crie enquetes e organize as perguntas do público.", analytics: "Audiência, participação e conexões geradas pelo evento.",
   settings: "Informações públicas, inscrições e disponibilidade do evento.",
+  coordinators: "Compartilhe a gestão deste evento com sua equipe.",
+  "company-rooms": "Deixe as salas de matchmaking prontas para as empresas inscritas.",
 };
 
 export function OrganizerDashboard({ initialEventId, initialTab = "overview" }: { initialEventId?: string; initialTab?: Tab }) {
@@ -53,7 +59,6 @@ export function OrganizerDashboard({ initialEventId, initialTab = "overview" }: 
   useEffect(() => {
     let cancelled = false;
     if (!user) { router.replace("/entrar?next=/painel"); return; }
-    if (user.account_type !== "organizer" && !user.is_staff) { router.replace("/"); return; }
     listAll<EventData>("events/?managed=true").then((items) => {
       if (cancelled) return;
       const webEvents = items.filter((item) => item.public_config.product_type !== "meeting");
@@ -98,7 +103,9 @@ export function OrganizerDashboard({ initialEventId, initialTab = "overview" }: 
       await operation();
       const items = await listAll<EventData>("events/?managed=true");
       setEvents(items.filter((item) => item.public_config.product_type !== "meeting"));
-      await load(activeId); setNotice(message); return true;
+      if (items.some((item) => item.id === activeId)) await load(activeId);
+      else setActiveId(items.find((item) => item.public_config.product_type !== "meeting")?.id ?? "");
+      setNotice(message); return true;
     } catch (reason) { if (onError) onError(reason); else setError(reason instanceof Error ? reason.message : "Não foi possível salvar."); return false; }
     finally { setBusy(false); }
   };
@@ -110,20 +117,22 @@ export function OrganizerDashboard({ initialEventId, initialTab = "overview" }: 
         {navigation.filter((item) => item.id !== "settings").map(({ id, label, icon: Icon }) => <button key={id} type="button" aria-current={tab === id ? "page" : undefined} className={tab === id ? styles.navActive : ""} onClick={() => setTab(id)}><Icon size={18} /><span>{label}</span></button>)}
         <span className={styles.comingSoon} tabIndex={0} aria-label="Gravações: em breve"><button type="button" disabled><Film size={18} /><span>Gravações</span></button><span className={styles.tooltip} role="tooltip">Em breve: gravações do evento</span></span>
       </nav>
-      <footer><button type="button" className={tab === "settings" ? styles.navActive : ""} onClick={() => setTab("settings")}><Settings size={18} /> Configurações</button><div className={styles.account}><span>{user?.first_name?.[0] || "O"}</span><div><strong>{user?.name || user?.username}</strong><small>Organizador</small></div><button type="button" aria-label="Sair da conta" onClick={logout}><LogOut size={18} /></button></div></footer>
+      <footer><button type="button" className={tab === "settings" ? styles.navActive : ""} onClick={() => setTab("settings")}><Settings size={18} /> Configurações</button><div className={styles.account}><span>{user?.first_name?.[0] || "O"}</span><div><strong>{user?.name || user?.username}</strong><small>{activeEvent?.owner?.id === user?.id ? "Organizador" : "Coordenador"}</small></div><button type="button" aria-label="Sair da conta" onClick={logout}><LogOut size={18} /></button></div></footer>
     </aside>
     <section className={styles.main}>
-      <header className={styles.topbar}><div><span className={styles.kicker}>PAINEL DO ORGANIZADOR</span><h1>{navigation.find((item) => item.id === tab)?.label}</h1><p>{descriptions[tab]}</p></div><div className={styles.headerActions}>
+      <header className={styles.topbar}><div><span className={styles.kicker}>GESTÃO DO EVENTO</span><h1>{navigation.find((item) => item.id === tab)?.label}</h1><p>{descriptions[tab]}</p></div><div className={styles.headerActions}>
         {events.length > 0 && <label className={styles.eventSelector}><CalendarDays size={20} /><span><small>Evento selecionado</small><select aria-label="Evento selecionado" value={activeId} disabled={busy} onChange={(event) => { setLoading(true); setError(""); setNotice(""); setRooms([]); setAnalytics(null); setActiveId(event.target.value); }}>{events.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></span><ChevronDown size={16} /></label>}
-        <Link className={styles.primary} href="/painel/eventos/novo"><Plus size={17} /> Novo evento</Link>
+        {(user?.account_type === "organizer" || user?.is_staff || user?.is_superuser) && <Link className={styles.primary} href="/painel/eventos/novo"><Plus size={17} /> Novo evento</Link>}
       </div></header>
       {(error || notice) && <div className={error ? styles.error : styles.success} role={error ? "alert" : "status"}>{error || notice}<button type="button" onClick={() => { setError(""); setNotice(""); }} aria-label="Fechar mensagem">×</button></div>}
       <div className={styles.content} aria-busy={loading || busy}>
-        {loading ? <Empty>Carregando informações do evento…</Empty> : !activeEvent ? <Empty><h2>Vamos criar seu primeiro evento?</h2><p>Configure as informações principais e receba um auditório pronto para testes.</p><Link className={styles.primary} href="/painel/eventos/novo">Criar evento</Link></Empty> : <div key={activeId}>
+        {loading ? <Empty>Carregando informações do evento…</Empty> : !activeEvent ? <Empty><h2>Nenhum evento disponível</h2><p>Os eventos que você organiza ou coordena aparecem aqui.</p>{(user?.account_type === "organizer" || user?.is_staff) && <Link className={styles.primary} href="/painel/eventos/novo">Criar evento</Link>}</Empty> : <div key={activeId}>
           {tab === "overview" && <Overview event={activeEvent} analytics={analytics} rooms={rooms} onNavigate={setTab} />}
           {tab === "agenda" && <AgendaPanel event={activeEvent} rooms={rooms} sessions={sessions} speakers={speakers} action={action} busy={busy} />}
           {tab === "stream" && <TransmissionPanel event={activeEvent} rooms={rooms} analytics={analytics} action={action} busy={busy} />}
+          {tab === "company-rooms" && <CompanyRoomsPanel event={activeEvent} rooms={rooms} registrations={registrations} action={action} busy={busy} />}
           {tab === "participants" && <ParticipantsPanel event={activeEvent} items={registrations} action={action} busy={busy} />}
+          {tab === "coordinators" && <CoordinatorsPanel event={activeEvent} action={action} busy={busy} />}
           {tab === "interactions" && <InteractionsPanel event={activeEvent} rooms={rooms} />}
           {tab === "analytics" && <AnalyticsPanel event={activeEvent} data={analytics} />}
           {tab === "settings" && <SettingsPanel event={activeEvent} action={action} busy={busy} />}
