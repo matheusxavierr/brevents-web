@@ -146,3 +146,13 @@
 @media (max-width: 900px) { .twoColumns { grid-template-columns: 1fr; } .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .sidebar { padding-inline: 12px; } }
 @media (max-width: 767px) { .workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); } .sidebar { gap: 8px; padding: 12px; } .sidebar > a { font-size: 1.15rem; } .sidebar nav { display: flex; overflow-x: auto; padding-bottom: 3px; } .sidebar nav button { width: auto; min-height: 34px; white-space: nowrap; padding: 8px 10px; font-size: .7rem; gap: 6px; } .sidebar nav svg { width: 15px; } .sidebar footer { position: absolute; top: 7px; right: 12px; display: block; border: 0; padding: 0; margin: 0; } .sidebar footer > button { padding: 9px; min-height: 34px; font-size: .7rem; } .navCaption, .account { display: none; } .tooltip { position: fixed; top: 100px; left: auto; right: 12px; } .topbar { gap: 12px; padding: 14px 16px; } .topbar h1 { font-size: 1.35rem; } .topbar p { font-size: .69rem; } .kicker { display: none; } .headerActions { gap: 8px; } .eventSelector { width: auto; flex: 1; padding: 7px 9px; } .eventSelector select { font-size: .72rem; } .headerActions > a { padding: 10px; font-size: .68rem; } .content { padding: 14px; } .card { padding: 16px; } .metrics { gap: 9px; } .metric { padding: 13px; } .metric strong { font-size: 1.55rem; } .metric span { font-size: .67rem; } .eventBanner { flex-wrap: wrap; padding: 16px; } .eventBanner h2 { font-size: 1.1rem; } .statusbar { padding-inline: 16px; } .error, .success { margin-inline: 14px; } .formGrid { grid-template-columns: 1fr; } .donutLayout { gap: 14px; } .donut { width: 120px; height: 120px; flex-basis: 120px; } .donut > div { width: 88px; height: 88px; } .listRow { flex-wrap: wrap; } }
 @media (prefers-reduced-motion: reduce) { .content > div { animation: none; } }
+
+@media (max-width: 767px) {
+  .companyTable, .companyTable tbody { display: block; width: 100%; }
+  .companyTable thead { display: none; }
+  .companyTable tr { display: grid; gap: 12px; border-top: 1px solid #edf1f7; padding: 16px; }
+  .companyTable tr:first-child { border-top: 0; }
+  .companyTable td { display: block; border: 0; padding: 0; overflow-wrap: anywhere; }
+  .companyTable td:nth-child(2)::before { content: "Representantes: "; color: #8795ac; }
+  .companyTable td .rowActions { gap: 6px; }
+}

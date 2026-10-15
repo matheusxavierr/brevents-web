@@ -8,12 +8,17 @@ export type User = {
   is_staff: boolean;
   is_superuser: boolean;
   account_type: "organizer" | "attendee";
+  can_manage_events?: boolean;
 };
+
+export type EventCoordinator = Pick<User, "id" | "username" | "first_name" | "last_name" | "email">;
 
 export type EventStatus = "draft" | "published" | "ended" | "archived";
 
 export type EventData = {
   id: string;
+  owner?: EventCoordinator;
+  managers?: number[];
   organization?: string | null;
   name: string;
   slug: string;
