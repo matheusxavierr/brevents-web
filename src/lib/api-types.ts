@@ -54,6 +54,7 @@ export type Room = {
   contact_name?: string;
   location?: string;
   host_registration?: string | null;
+  coordinated?: boolean;
 };
 
 export type ZoomSession = {
@@ -186,7 +187,19 @@ export type Registration = {
   status: "pending" | "confirmed" | "cancelled" | "blocked";
   ticket_code: string;
   profile: Record<string, string>;
+  matchmaking_role?: "exporter" | "importer";
   created_at: string;
+};
+
+export type MatchmakingParticipant = { id: string; name: string; company: string; matchmaking_role: "exporter" | "importer" };
+export type MatchmakingRound = { id: string; room: string; exporter: MatchmakingParticipant; importer: MatchmakingParticipant; starts_at: string; expires_at: string; ended_at: string | null; end_reason: string };
+export type MatchmakingState = {
+  server_time: string; open: boolean; role: "coordinator" | "exporter" | "importer";
+  registration: MatchmakingParticipant | null; room: Room | null; round: MatchmakingRound | null;
+  own_room_available?: boolean;
+  waiting?: MatchmakingParticipant[];
+  rooms?: Array<{ room: Room; exporter: MatchmakingParticipant | null; online: boolean; round: MatchmakingRound | null; exporter_connected?: boolean; importer_connected?: boolean }>;
+  recent?: MatchmakingRound[];
 };
 
 export type NetworkingPresence = {

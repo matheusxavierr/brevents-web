@@ -22,7 +22,7 @@ const navigation = [
   { id: "overview", label: "Visão geral", icon: LayoutDashboard },
   { id: "agenda", label: "Programação", icon: CalendarDays },
   { id: "stream", label: "Auditório e rodadas", icon: Radio },
-  { id: "company-rooms", label: "Salas das empresas", icon: Building2 },
+  { id: "company-rooms", label: "Salas e matchmaking", icon: Building2 },
   { id: "participants", label: "Participantes", icon: Users },
   { id: "coordinators", label: "Coordenadores", icon: Users },
   { id: "interactions", label: "Interações", icon: MessageSquare },
@@ -35,7 +35,7 @@ const descriptions: Record<Tab, string> = {
   interactions: "Crie enquetes e organize as perguntas do público.", analytics: "Audiência, participação e conexões geradas pelo evento.",
   settings: "Informações públicas, inscrições e disponibilidade do evento.",
   coordinators: "Compartilhe a gestão deste evento com sua equipe.",
-  "company-rooms": "Deixe as salas de matchmaking prontas para as empresas inscritas.",
+  "company-rooms": "Direcione importadores, acompanhe as empresas e gerencie cada conversa 1:1.",
 };
 
 export function OrganizerDashboard({ initialEventId, initialTab = "overview" }: { initialEventId?: string; initialTab?: Tab }) {

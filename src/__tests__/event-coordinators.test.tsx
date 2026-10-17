@@ -44,17 +44,13 @@ describe("coordenação do evento e salas por empresa", () => {
     expect(mocks.api).toHaveBeenCalledWith("events/event/coordinators/", { method: "DELETE", body: { email: user.email } });
   });
 
-  it("prepara uma sala por empresa usando representantes confirmados mesmo com rodadas fechadas", async () => {
-    mocks.api.mockResolvedValue(room);
+  it("exibe salas automáticas e direcionamento no painel da empresa", async () => {
+    mocks.api.mockResolvedValue({ server_time: event.starts_at, open: false, role: "coordinator", registration: null, room: null, round: null, waiting: [], rooms: [{ room, exporter: { id: "reg-2", name: "Bia", company: "Acme", matchmaking_role: "exporter" }, online: false, round: null }] });
     render(<CompanyRoomsPanel event={{ ...event, feature_flags: {} }} registrations={[...registrations, { ...registrations[0], id: "cancelled", name: "Cancelada", profile: { company: "Cancelada" }, status: "cancelled" }]} rooms={[]} action={action} busy={false} />);
-    expect(screen.getAllByRole("row")).toHaveLength(2);
-    fireEvent.click(screen.getAllByRole("button", { name: "Preparar sala" })[0]);
-    const dialog = screen.getByRole("dialog", { name: "Preparar sala da empresa" });
-    expect(within(dialog).getByLabelText("Empresa inscrita").querySelectorAll("option")).toHaveLength(1);
-    fireEvent.change(within(dialog).getByLabelText("Representante de contato"), { target: { value: "reg-2" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Salvar sala" }));
-    await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("rooms/networking/", { method: "POST", body: { event: "event", host_registration: "reg-2", location: "", topic: "" } }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await screen.findByRole("heading", { name: "Acme" });
+    expect(screen.getByRole("button", { name: "Direcionar participante" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Abrir rodadas" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Preparar sala" })).not.toBeInTheDocument();
   });
 
   it("abre o painel para coordenador com conta participante e exibe sua equipe", async () => {

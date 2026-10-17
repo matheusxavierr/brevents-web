@@ -14,6 +14,7 @@ export function RegistrationForm({ eventId, eventSlug, accessMode }: { eventId: 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [registration, setRegistration] = useState<Registration | null>(null);
+  const [matchmakingRole, setMatchmakingRole] = useState("importer");
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setLoading(true); setError("");
@@ -23,7 +24,7 @@ export function RegistrationForm({ eventId, eventSlug, accessMode }: { eventId: 
         const response = await fetch("/api/guest/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ event: eventId, name: data.name, email: data.email, profile: { company: data.company, role: data.role }, consent_at: new Date().toISOString() }),
+          body: JSON.stringify({ event: eventId, name: data.name, email: data.email, matchmaking_role: matchmakingRole, profile: { company: data.company, role: data.role }, consent_at: new Date().toISOString() }),
         });
         const result = await response.json();
         if (!response.ok) throw new Error(readError(result));
@@ -38,7 +39,7 @@ export function RegistrationForm({ eventId, eventSlug, accessMode }: { eventId: 
         if (!response.ok) throw new Error(readError(result));
         activeUser = result as User; setUser(activeUser);
       }
-      const created = await apiClient<Registration>("registrations/", { method: "POST", body: { event: eventId, name: activeUser.name || data.name, email: activeUser.email || data.email, profile: { company: data.company, role: data.role }, consent_at: new Date().toISOString() } });
+      const created = await apiClient<Registration>("registrations/", { method: "POST", body: { event: eventId, name: activeUser.name || data.name, email: activeUser.email || data.email, matchmaking_role: matchmakingRole, profile: { company: data.company, role: data.role }, consent_at: new Date().toISOString() } });
       setRegistration(created);
       router.replace(`/eventos/${eventSlug}/lobby`);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Não foi possível concluir sua inscrição."); }
@@ -52,7 +53,8 @@ export function RegistrationForm({ eventId, eventSlug, accessMode }: { eventId: 
       <label className="field"><span>Nome completo</span><input name="name" defaultValue={user?.name} disabled={Boolean(user)} required /></label>
       <label className="field"><span>E-mail</span><input name="email" type="email" defaultValue={user?.email} disabled={Boolean(user)} required /></label>
       {!user && accessMode !== "public" && <label className="field field-wide"><span>Crie uma senha para acessar o evento</span><input name="password" type="password" autoComplete="new-password" minLength={8} required /></label>}
-      <label className="field"><span>Empresa</span><input name="company" /></label>
+      <label className="field field-wide"><span>Como você participa das rodadas?</span><select name="matchmaking_role" value={matchmakingRole} onChange={(change) => setMatchmakingRole(change.target.value)}><option value="importer">Importador · conhecer empresas e oportunidades</option><option value="exporter">Exportador · apresentar minha empresa</option></select><small>{matchmakingRole === "exporter" ? "Sua sala será criada automaticamente em nome da empresa. Entre com sua conta para participar das rodadas." : "Na área de espera, a coordenação direcionará suas conversas de até 10 minutos."}</small></label>
+      <label className="field"><span>Empresa{matchmakingRole === "exporter" ? " *" : ""}</span><input name="company" maxLength={120} required={matchmakingRole === "exporter"} /></label>
       <label className="field"><span>Cargo</span><input name="role" /></label>
     </div>
     <label className="check-field"><input name="consent" type="checkbox" required /><span>Concordo com o uso dos meus dados para a realização deste evento.</span></label>
