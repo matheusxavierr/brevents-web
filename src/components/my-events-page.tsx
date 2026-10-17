@@ -84,7 +84,6 @@ export function MyEventsPage() {
                     <span className={`status-pill status-${event.status ?? "published"}`}>
                       {event.status === "ended" ? "Encerrado" : "Inscrição confirmada"}
                     </span>
-                    {event.public_config.product_type === "meeting" && <small>Meeting</small>}
                   </div>
                   <h2>{event.name}</h2>
                   <p className="my-event-meta">
