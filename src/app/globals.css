@@ -2659,3 +2659,35 @@ section:nth-of-type(even) .eyebrow::before { background-image: url("/brand/star-
   .message { gap: 8px; }
   .message time { display: block; margin: 3px 0 0; }
 }
+
+/* Keep every pre-room control reachable in short windows and browser zoom. */
+.zoom-prejoin { width: 100%; height: 100%; max-height: 100%; min-height: 0; overflow-y: auto; align-content: safe center; flex-shrink: 1; padding-block: clamp(12px, 2dvh, 28px); gap: clamp(8px, 1.5dvh, 18px); }
+.meeting-live-page .live-layout { grid-template-rows: minmax(0, 1fr); }
+.meeting-live-page .video-column { min-height: 0; }
+.zoom-prejoin > * { flex-shrink: 0; }
+.zoom-prejoin h1 { font-size: clamp(1.65rem, min(4vw, 6dvh), 3.8rem); line-height: 1.02; }
+.zoom-prejoin .media-device-setup { max-height: none; }
+.zoom-prejoin .media-preview { height: clamp(120px, 31dvh, 300px); }
+.zoom-prejoin > .button-primary { position: sticky; z-index: 4; bottom: 0; min-height: 44px; box-shadow: 0 -8px 20px #002057; }
+@media (max-height: 850px) and (min-width: 768px) {
+  .zoom-prejoin { align-content: start; gap: 8px; padding: 14px 22px; }
+  .zoom-prejoin h1 { font-size: clamp(1.5rem, 4dvh, 2.4rem); }
+  .zoom-prejoin > p { font-size: .75rem; }
+  .zoom-prejoin .media-device-controls { gap: 5px; }
+  .zoom-prejoin .media-device-controls select { padding-block: 7px; }
+  .zoom-prejoin .zoom-capabilities, .zoom-prejoin-chat-note { display: none; }
+}
+@media (max-width: 767px) {
+  .zoom-prejoin { display: flex; align-items: stretch; justify-content: start; text-align: center; }
+  .zoom-prejoin .media-device-setup { grid-template-columns: 1fr; }
+  .zoom-prejoin > .button-primary { width: 100%; margin-top: 8px; }
+}
+
+/* Expand the existing share surface without replacing its Zoom player. */
+.zoom-meeting-shell.zoom-share-expanded { position: fixed; z-index: 200; inset: 6px; width: auto; height: auto; grid-template-rows: minmax(0, 1fr) auto; border-radius: 14px; background: #00132e; box-shadow: 0 0 0 20px #00132e; }
+.zoom-share-expanded .zoom-meeting-status { display: none; }
+.zoom-share-expanded .zoom-media-stage { grid-row: 1; margin: 0; border-radius: 8px; }
+.zoom-share-expanded .zoom-media-stage.share-focused .zoom-share-maximize { bottom: 16px; }
+.zoom-share-expanded .zoom-controls { grid-row: 2; padding-block: 8px; }
+.zoom-share-expanded .zoom-share-surface { padding: 0; }
+@media (prefers-reduced-motion: no-preference) { .zoom-share-expanded { animation: zoom-media-enter 160ms ease-out; } }

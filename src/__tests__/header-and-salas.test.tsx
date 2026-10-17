@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { HomeHeader } from "@/components/home-header";
+import { MyEventsPage } from "@/components/my-events-page";
 import { NetworkingLobby } from "@/components/networking-lobby";
 import { SessionProvider } from "@/components/session-provider";
 import type { EventData, User } from "@/lib/api-types";
@@ -50,6 +51,20 @@ function paginated<T>(results: T[]) {
   return { count: results.length, next: null, previous: null, results };
 }
 
+function mockRegisteredEvents() {
+  const meeting = { ...event, id: "m1", name: "Meeting privado", slug: "meeting-privado", public_config: { product_type: "meeting" } };
+  apiClientMock.mockImplementation((path: string) => {
+    if (path === "registrations/") {
+      return Promise.resolve(paginated([event, meeting].map((item) => ({
+        id: `registration-${item.id}`, event: item.id, user: user.id, email: user.email,
+        name: user.name, status: "confirmed", ticket_code: item.id, profile: {}, created_at: "",
+      }))));
+    }
+    if (path === "events/") return Promise.resolve(paginated([meeting, event]));
+    return Promise.resolve(paginated([]));
+  });
+}
+
 describe("header logado e salas de matchmaking", () => {
   beforeEach(() => {
     apiClientMock.mockReset();
@@ -61,13 +76,7 @@ describe("header logado e salas de matchmaking", () => {
   });
 
   it("mostra os menus Produtos e Meus eventos com as inscrições do usuário", async () => {
-    apiClientMock.mockImplementation((path: string) => {
-      if (path === "registrations/") {
-        return Promise.resolve(paginated([{ id: "r1", event: "e1", user: 7, email: user.email, name: user.name, status: "confirmed", ticket_code: "abc", profile: {}, created_at: "" }]));
-      }
-      if (path === "events/") return Promise.resolve(paginated([event]));
-      return Promise.resolve(paginated([]));
-    });
+    mockRegisteredEvents();
 
     render(<SessionProvider initialUser={user}><HomeHeader /></SessionProvider>);
 
@@ -77,7 +86,18 @@ describe("header logado e salas de matchmaking", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Meus eventos/i }));
     expect(await screen.findByText("BR Tech Webinar")).toBeInTheDocument();
+    expect(screen.queryByText("Meeting privado")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Ver todos os meus eventos/i })).toHaveAttribute("href", "/meus-eventos");
+  });
+
+  it("lista somente Web Events na página Meus eventos, mesmo com inscrição em Meeting", async () => {
+    mockRegisteredEvents();
+
+    render(<SessionProvider initialUser={user}><MyEventsPage /></SessionProvider>);
+
+    expect(await screen.findByRole("heading", { name: event.name })).toBeInTheDocument();
+    expect(screen.queryByText("Meeting privado")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Entrar no lobby/i })).toHaveAttribute("href", `/eventos/${event.slug}/lobby`);
   });
 
   it("exige empresa e nome ao criar uma sala no matchmaking", async () => {

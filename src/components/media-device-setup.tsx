@@ -1,7 +1,7 @@
 "use client";
 
 import { Camera, CameraOff, LoaderCircle, Mic, MicOff } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 export type VirtualBackgroundMode = "none" | "blur";
 
@@ -24,13 +24,14 @@ export const defaultMediaPreferences: MediaPreferences = {
 };
 
 type MediaDeviceSetupProps = {
+  children?: ReactNode;
   value: MediaPreferences;
   onChange: (preferences: MediaPreferences) => void;
   active?: boolean;
   stopPreviewRef?: { current: (() => Promise<void>) | null };
 };
 
-export function MediaDeviceSetup({ value, onChange, active = true, stopPreviewRef }: MediaDeviceSetupProps) {
+export function MediaDeviceSetup({ value, onChange, active = true, stopPreviewRef, children }: MediaDeviceSetupProps) {
   const preview = useRef<HTMLDivElement>(null);
   const audioStream = useRef<MediaStream | null>(null);
   const videoStream = useRef<MediaStream | null>(null);
@@ -261,6 +262,7 @@ export function MediaDeviceSetup({ value, onChange, active = true, stopPreviewRe
           </select>
         </label>
         <label><span>Fundo da câmera</span><select value={value.virtualBackgroundMode} onChange={(event) => update({ virtualBackgroundMode: event.target.value as VirtualBackgroundMode })}><option value="none">Sem efeito</option><option value="blur">Desfocar fundo</option></select></label>
+        {children}
         {error && <p className="media-device-error" role="alert">{error}</p>}
       </div>
     </div>

@@ -7,6 +7,7 @@ import { ApiError, apiClient } from "@/lib/api-client";
 import type { CaptionLanguage, LiveCaption, ParticipantDirectoryEntry, StageInvitation, ZoomJoinResponse, ZoomSession } from "@/lib/api-types";
 import { LiveCaptionControls } from "./live-caption-controls";
 import { useZoomCaptions } from "./use-zoom-captions";
+import { captionLanguages } from "@/lib/zoom-captions";
 import { defaultMediaPreferences, MediaDeviceSetup, type MediaPreferences, type VirtualBackgroundMode } from "./media-device-setup";
 
 type ZoomModule = typeof import("@zoom/videosdk");
@@ -59,7 +60,7 @@ function selectedVirtualBackground(preferences: MediaPreferences) {
   return undefined;
 }
 
-export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "event", onCaption, onJoinedChange }: { session: ZoomSession; eventId: string; guest?: boolean; roomMode?: "event" | "meeting"; onCaption?: (caption: LiveCaption) => void; onJoinedChange?: (joined: boolean) => void }) {
+export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "event", onCaption, onJoinedChange, autoJoin = false, endLiveOnLeave = true, onLeave }: { session: ZoomSession; eventId: string; guest?: boolean; roomMode?: "event" | "meeting"; onCaption?: (caption: LiveCaption) => void; onJoinedChange?: (joined: boolean) => void; autoJoin?: boolean; endLiveOnLeave?: boolean; onLeave?: () => void }) {
   const container = useRef<HTMLDivElement>(null);
   const shareContainer = useRef<HTMLDivElement>(null);
   const sharePreviewVideo = useRef<HTMLVideoElement>(null);
@@ -98,6 +99,8 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
   const [sharePreviewKind, setSharePreviewKind] = useState<"video" | "canvas" | null>(null);
   const [activeShareUserId, setActiveShareUserId] = useState<number | null>(null);
   const [shareMaximized, setShareMaximized] = useState(false);
+  const autoJoined = useRef(false);
+  const autoJoinAction = useRef<(() => Promise<void>) | null>(null);
   const [participantPage, setParticipantPage] = useState(0);
   const [focus, setFocus] = useState<"grid" | "share" | `video:${number}`>("grid");
   const [participants, setParticipants] = useState<ZoomParticipant[]>([]);
@@ -218,6 +221,13 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
   }, [eventId, guest, session.id]);
 
   const captions = useZoomCaptions({ client: state === "joined" ? captionClient : null, sessionId: session.id, onCaption, saveTranscript });
+
+  useEffect(() => {
+    if (!shareMaximized) return;
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") setShareMaximized(false); };
+    window.addEventListener("keydown", escape);
+    return () => window.removeEventListener("keydown", escape);
+  }, [shareMaximized]);
 
   useEffect(() => {
     let thumbnailIndex = 0;
@@ -542,6 +552,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
   }
 
   async function join() {
+    window.sessionStorage.setItem("brevents:media-preferences", JSON.stringify(mediaPreferences));
     setState("joining");
     setError("");
     try {
@@ -850,6 +861,16 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
     }
   }
 
+  useEffect(() => {
+    autoJoinAction.current = join;
+  });
+
+  useEffect(() => {
+    if (!autoJoin || autoJoined.current || state !== "ready") return;
+    const timer = window.setTimeout(() => { autoJoined.current = true; void autoJoinAction.current?.(); }, 600);
+    return () => window.clearTimeout(timer);
+  }, [autoJoin, state]);
+
   async function toggleAudio() {
     const stream = streamRef.current;
     if (!stream) return;
@@ -985,7 +1006,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
     if (moderationFeedbackTimer.current) clearTimeout(moderationFeedbackTimer.current);
     moderationFeedbackTimer.current = null;
     await releasePresence();
-    if (isHost.current) {
+    if (isHost.current && endLiveOnLeave) {
       try { await apiClient(`zoom-sessions/${session.id}/end-live/`, { method: "POST" }); }
       catch (endLiveError) { console.error("Não foi possível encerrar o status da transmissão.", endLiveError); }
     }
@@ -1022,6 +1043,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
     setCaptionClient(null);
     setState("left");
     onJoinedChange?.(false);
+    onLeave?.();
   }
 
   async function inviteToStage(participant: ZoomParticipant) {
@@ -1182,7 +1204,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
       if (feedbackTimer.current) clearTimeout(feedbackTimer.current);
       if (presenceHeartbeatTimer.current) clearInterval(presenceHeartbeatTimer.current);
       void audioContextRef.current?.close();
-      if (isHost.current) {
+      if (isHost.current && endLiveOnLeave) {
         void fetch(`/api/backend/zoom-sessions/${session.id}/end-live/`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1202,7 +1224,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
       }
       clientRef.current?.leave().catch(() => undefined);
     };
-  }, [guest, session.id]);
+  }, [guest, session.id, endLiveOnLeave]);
 
   if (state === "removed" || state === "ended" || state === "duplicate") {
     return (
@@ -1222,7 +1244,9 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
         <span className="live-pill"><span className="live-dot" /> Sala interativa</span>
         <h1>{state === "left" ? "Você saiu da sala" : activeRoomMode === "meeting" ? "Tudo pronto para a reunião?" : "Entre no palco ao vivo"}</h1>
         <p>Escolha sua câmera e seu microfone. Você poderá trocar os dispositivos durante a chamada.</p>
-        <MediaDeviceSetup value={mediaPreferences} onChange={setMediaPreferences} active={state !== "joining"} stopPreviewRef={stopPreviewRef} />
+        <MediaDeviceSetup value={mediaPreferences} onChange={setMediaPreferences} active={state !== "joining"} stopPreviewRef={stopPreviewRef}>
+          <label><span>Idioma que vou falar</span><select value={captions.spokenLanguage} onChange={(change) => captions.selectSpokenLanguage(change.target.value as CaptionLanguage)}>{Object.entries(captionLanguages).map(([value, language]) => <option key={value} value={value}>{language.label}</option>)}</select></label>
+        </MediaDeviceSetup>
         <div className="zoom-prejoin-chat-note"><LockKeyhole size={15} /><span>Chat e transcrição disponíveis ao entrar</span></div>
         <div className="zoom-capabilities" aria-label="Recursos da sala">
           <span><Video size={15} /> Live Meeting</span>
@@ -1240,7 +1264,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
   const focusClass = focus === "share" ? "share-focused" : focus.startsWith("video:") ? "video-focused" : "grid-focused";
   const participantPageCount = Math.max(1, Math.ceil(participants.length / participantPageSize));
   const safeParticipantPage = Math.min(participantPage, participantPageCount - 1);
-  const audienceParticipants = participants.filter((participant) => !participant.isHost && !participant.isManager);
+  const audienceParticipants = activeRoomMode === "meeting" ? participants : participants.filter((participant) => !participant.isHost && !participant.isManager);
   const directoryParticipants = role === "host" ? audienceParticipants : participants;
   const onStageParticipantCount = audienceParticipants.filter((participant) => stageMembers[participantIdentity(participant)]?.status === "accepted").length;
   const normalizedParticipantSearch = normalizeSearch(participantSearch);
@@ -1254,7 +1278,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
   });
 
   return (
-    <div className="zoom-meeting-shell">
+    <div className={`zoom-meeting-shell${shareMaximized ? " zoom-share-expanded" : ""}`}>
       <div className="zoom-meeting-status">
         <span className="live-dot" /> AO VIVO · {activeRoomMode === "meeting" ? role === "host" ? "ORGANIZADOR" : "PARTICIPANTE" : role === "host" ? "ORGANIZADOR" : onStage ? "NO PALCO" : role === "viewer" ? "ESPECTADOR" : "PLATEIA"}
         {role === "host"

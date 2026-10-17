@@ -19,7 +19,7 @@ import { useSession } from "./session-provider";
 type MeetingTab = "chat" | "transcript";
 type JoinResponse = { token: string };
 
-export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/", onExit, exitLabel = "Encerrar conversa" }: { event: EventData; roomOverride?: Room; exitHref?: string; onExit?: () => void; exitLabel?: string }) {
+export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/", onExit, exitLabel = "Encerrar conversa", autoJoin = false, onCallState, onCallLeave }: { event: EventData; roomOverride?: Room; exitHref?: string; onExit?: () => void; exitLabel?: string; autoJoin?: boolean; onCallState?: (joined: boolean) => void; onCallLeave?: () => void }) {
   const router = useRouter();
   const { user: sessionUser } = useSession();
   const room = roomOverride ?? event.rooms?.find((item) => item.mode === "meeting" && item.zoom_session) ?? event.rooms?.[0];
@@ -35,9 +35,12 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
   const [inRoom, setInRoom] = useState(false);
   const [hasJoined, setHasJoined] = useState(false);
   const joinedOnce = useRef(false);
+  const callState = useRef(onCallState);
+  useEffect(() => { callState.current = onCallState; }, [onCallState]);
   const transcript = useTranscript({ sessionId: room?.zoom_session?.id, eventId: event.id, enabled: hasJoined, refreshKey: inRoom, title: event.name, roomName: room?.name ?? "Reunião", timeZone: event.timezone });
   const captions = transcript.captions;
   const changeJoined = useCallback((joined: boolean) => {
+    callState.current?.(joined);
     setInRoom(joined);
     if (joined) { joinedOnce.current = true; setHasJoined(true); }
     else if (joinedOnce.current) setTab("transcript");
@@ -246,7 +249,7 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
         <section className="video-column" aria-label="Reunião ao vivo">
           <div className="video-player">
             {accessGranted && room.zoom_session
-              ? <ZoomVideoRoom session={room.zoom_session} eventId={event.id} roomMode="meeting" onCaption={transcript.addCaption} onJoinedChange={changeJoined} />
+              ? <ZoomVideoRoom session={room.zoom_session} eventId={event.id} roomMode="meeting" onCaption={transcript.addCaption} onJoinedChange={changeJoined} autoJoin={autoJoin} endLiveOnLeave={!room.coordinated} onLeave={onCallLeave} />
               : <div className="video-center"><span className="navigation-spinner" /><p>Preparando sua reunião…</p></div>}
           </div>
           {error && <p className="live-error" role="alert">{error}</p>}
@@ -278,11 +281,11 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
         <section className="meeting-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="leave-meeting-title" onMouseDown={(event) => event.stopPropagation()}>
           <ChevronLeft size={24} aria-hidden="true" />
           <p className="eyebrow">Sair da reunião</p>
-          <h2 id="leave-meeting-title">Quer voltar para a Home?</h2>
-          <p>Você sairá desta sala e poderá entrar novamente pelo link enquanto a reunião estiver aberta.</p>
+          <h2 id="leave-meeting-title">{onExit ? `${exitLabel}?` : "Quer voltar para a Home?"}</h2>
+          <p>{room.coordinated ? "Ao encerrar a conversa, o importador volta à espera e o exportador fica disponível na sala da empresa." : "Você sairá desta sala e poderá entrar novamente pelo link enquanto a reunião estiver aberta."}</p>
           {hasJoined && <TranscriptDownload {...transcript} />}
           {transcript.error && <p role="alert">{transcript.error}</p>}
-          <div className="meeting-confirm-actions"><button className="button button-secondary" type="button" onClick={() => setExitConfirmationOpen(false)}>Continuar na reunião</button><button className="button button-primary" type="button" onClick={confirmExit}>Voltar para a Home</button></div>
+          <div className="meeting-confirm-actions"><button className="button button-secondary" type="button" onClick={() => setExitConfirmationOpen(false)}>Continuar na reunião</button><button className="button button-primary" type="button" onClick={confirmExit}>{onExit ? exitLabel : "Voltar para a Home"}</button></div>
         </section>
       </div>}
     </main>

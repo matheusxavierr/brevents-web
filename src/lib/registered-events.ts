@@ -14,6 +14,6 @@ export async function loadRegisteredEvents(): Promise<EventData[]> {
     registrationPage.results.filter(registrationIsActive).map((registration) => registration.event),
   );
   return eventPage.results
-    .filter((event) => registeredIds.has(event.id))
+    .filter((event) => registeredIds.has(event.id) && event.public_config.product_type !== "meeting")
     .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
 }
