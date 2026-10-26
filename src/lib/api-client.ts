@@ -7,10 +7,14 @@ export class ApiError extends Error {
 }
 
 export async function apiClient<T>(path: string, options: ApiOptions = {}): Promise<T> {
+  const multipart = typeof FormData !== "undefined" && options.body instanceof FormData;
+  const headers = new Headers(options.headers);
+  if (multipart) headers.delete("Content-Type");
+  else if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   const response = await fetch(`/api/backend/${path.replace(/^\//, "")}`, {
     ...options,
-    headers: { "Content-Type": "application/json", ...options.headers },
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    headers,
+    body: multipart ? options.body as FormData : options.body === undefined ? undefined : JSON.stringify(options.body),
   });
   const data = await response.json().catch(() => null);
   if (!response.ok) {
