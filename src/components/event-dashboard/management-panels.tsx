@@ -8,6 +8,7 @@ import { ensureEventAuditorium } from "@/lib/event-room";
 import type { Analytics, EventData, Registration, Room } from "@/lib/api-types";
 import { dateTime, Dialog, Empty, localDateTime, mainRoom, Metric, type DashboardAction } from "./shared";
 import styles from "./dashboard.module.css";
+import { ImporterEnrollment } from "./importer-enrollment";
 
 const registrationLabels = { confirmed: "Confirmada", pending: "Pendente", cancelled: "Cancelada", blocked: "Bloqueada" };
 export const networkingLabels: Record<string, string> = { pending: "Aguardando", accepted: "Aceita", declined: "Recusada", cancelled: "Cancelada", ended: "Encerrada" };
@@ -20,7 +21,7 @@ export function ParticipantsPanel({ event, items, action, busy }: { event: Event
   const pages = Math.max(1, Math.ceil(filtered.length / 10));
   const safePage = Math.min(page, pages - 1);
   return <section className={styles.card}>
-    <div className={styles.cardHeading}><div><h2>Inscrições do evento</h2><p>{items.length} pessoas inscritas · informações fornecidas na inscrição</p></div><Users size={22} /></div>
+    <div className={`${styles.cardHeading} ${styles.participantsHeading}`}><div><h2>Inscrições do evento</h2><p>{items.length} pessoas inscritas · informações fornecidas na inscrição</p></div><ImporterEnrollment event={event} action={action} busy={busy} /></div>
     <div className={styles.toolbar}><label className={styles.search}><Search size={17} /><input type="search" aria-label="Buscar participantes" placeholder="Nome, e-mail, empresa ou cargo" value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); }} /></label>
       <div className={styles.pagination}><span>{filtered.length} resultados · 10 por página</span><button type="button" aria-label="Página anterior" disabled={safePage === 0} onClick={() => setPage(safePage - 1)}><ChevronLeft size={16} /></button><span>{safePage + 1} / {pages}</span><button type="button" aria-label="Próxima página" disabled={safePage >= pages - 1} onClick={() => setPage(safePage + 1)}><ChevronRight size={16} /></button></div>
     </div>

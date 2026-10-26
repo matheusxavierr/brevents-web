@@ -48,6 +48,7 @@
 .card p { color: #7988a0; font-size: .78rem; line-height: 1.55; }
 .cardHeading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
 .cardHeading p { margin: 5px 0 0; }
+.participantsHeading { flex-wrap: wrap; }
 .eventBanner { display: flex; align-items: center; justify-content: space-between; gap: 20px; border: 1px solid #dde7f8; border-radius: 16px; background: linear-gradient(110deg, #e8efff, #f6faff); padding: 20px 24px; }
 .eventBanner h2 { margin: 9px 0; font-size: 1.3rem; letter-spacing: -.03em; }
 .eventBanner p { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; color: #677e9e; font-size: .74rem; }
