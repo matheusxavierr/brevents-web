@@ -18,6 +18,8 @@ Acesse [http://localhost:3000](http://localhost:3000).
 
 ## Experiências disponíveis
 
+- `/beauty-bridge` — landing The Beauty Bridge; versões PT, EN e ES em `/beauty-bridge/pt.html`, `/beauty-bridge/en.html` e `/beauty-bridge/es.html`. O formulário envia para `POST /api/public/beauty-bridge/signups/` por meio do proxy da API.
+
 - `/entrar` e `/criar-conta` — autenticação com sessão em cookies HTTP-only
 - `/eventos/[slug]` — página pública alimentada pela API
 - `/eventos/[slug]/inscricao` — cadastro de conta e inscrição no evento
