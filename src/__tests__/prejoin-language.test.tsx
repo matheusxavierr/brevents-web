@@ -9,7 +9,9 @@ describe("idioma de fala na pré-sala", () => {
   it("permite escolher os quatro idiomas e preserva a escolha para a chamada", () => {
     render(<ZoomVideoRoom session={{ id: 1, configured: true, is_live: false }} eventId="event" roomMode="meeting" />);
     const language = screen.getByLabelText("Idioma que vou falar");
-    expect(language.querySelectorAll("option")).toHaveLength(4);
+    expect(language.querySelectorAll("option")).toHaveLength(5);
+    expect(language).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Entrar na reunião" })).toBeDisabled();
     fireEvent.change(language, { target: { value: "en-US" } });
     expect(localStorage.getItem("brevents-spoken-language")).toBe("en-US");
     expect(language).toHaveValue("en-US");

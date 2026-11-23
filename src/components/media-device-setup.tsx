@@ -9,6 +9,7 @@ export type MediaPreferences = {
   audioEnabled: boolean;
   videoEnabled: boolean;
   audioDeviceId: string;
+  speakerDeviceId?: string;
   videoDeviceId: string;
   noiseSuppression: boolean;
   virtualBackgroundMode: VirtualBackgroundMode;
@@ -18,6 +19,7 @@ export const defaultMediaPreferences: MediaPreferences = {
   audioEnabled: false,
   videoEnabled: false,
   audioDeviceId: "",
+  speakerDeviceId: "",
   videoDeviceId: "",
   noiseSuppression: true,
   virtualBackgroundMode: "none",
@@ -39,6 +41,7 @@ export function MediaDeviceSetup({ value, onChange, active = true, stopPreviewRe
   const previewClient = useRef<ReturnType<typeof import("@zoom/videosdk")["default"]["createClient"]> | null>(null);
   const previewInitialization = useRef<Promise<void> | null>(null);
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+  const [speakerDevices, setSpeakerDevices] = useState<MediaDeviceInfo[]>([]);
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
   const [error, setError] = useState("");
   const [previewState, setPreviewState] = useState<"off" | "loading" | "ready" | "error">("off");
@@ -51,6 +54,7 @@ export function MediaDeviceSetup({ value, onChange, active = true, stopPreviewRe
       const devices = await navigator.mediaDevices.enumerateDevices();
       if (cancelled) return;
       setAudioDevices(devices.filter((device) => device.kind === "audioinput"));
+      setSpeakerDevices(devices.filter((device) => device.kind === "audiooutput" && device.deviceId && device.deviceId !== "default"));
       setVideoDevices(devices.filter((device) => device.kind === "videoinput"));
     }
 
@@ -187,6 +191,7 @@ export function MediaDeviceSetup({ value, onChange, active = true, stopPreviewRe
         const devices = await navigator.mediaDevices.enumerateDevices();
         if (!cancelled) {
           setAudioDevices(devices.filter((device) => device.kind === "audioinput"));
+          setSpeakerDevices(devices.filter((device) => device.kind === "audiooutput" && device.deviceId && device.deviceId !== "default"));
           setVideoDevices(devices.filter((device) => device.kind === "videoinput"));
         }
       } catch (reason) {
@@ -254,6 +259,13 @@ export function MediaDeviceSetup({ value, onChange, active = true, stopPreviewRe
             {audioDevices.map((device, index) => <option value={device.deviceId} key={device.deviceId}>{device.label || `Microfone ${index + 1}`}</option>)}
           </select>
         </div>
+        <label>
+          <span>Saída de áudio</span>
+          <select value={speakerDevices.some((device) => device.deviceId === value.speakerDeviceId) ? value.speakerDeviceId : ""} onChange={(event) => update({ speakerDeviceId: event.target.value })}>
+            <option value="">Saída padrão do sistema</option>
+            {speakerDevices.map((device, index) => <option value={device.deviceId} key={device.deviceId}>{device.label || `Saída de áudio ${index + 1}`}</option>)}
+          </select>
+        </label>
         <label>
           <span>Câmera</span>
           <select value={value.videoDeviceId} onChange={(event) => update({ videoDeviceId: event.target.value })}>

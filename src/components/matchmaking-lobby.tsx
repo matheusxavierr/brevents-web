@@ -26,7 +26,10 @@ export function MatchmakingLobby({ event }: { event: EventData }) {
       <p>{!user ? "Use a conta associada à sua inscrição para encontrar empresas e conversar." : !data?.open ? "Você será direcionado quando o organizador abrir as rodadas. Pode aguardar aqui." : "A coordenação está organizando suas próximas conversas. Quando uma empresa for selecionada, a sala abrirá automaticamente para você."}</p>
       <div className={styles.steps}><div><ShieldCheck size={23} /><strong>Direcionamento pela coordenação</strong><small>Você não precisa escolher ou procurar uma sala.</small></div><div><Clock3 size={23} /><strong>Até 10 minutos por conversa</strong><small>Ao finalizar, você volta para cá e aguarda a próxima conexão.</small></div></div>
       {error && <p className={styles.error} role="alert">{error}</p>}{!data && user && !error && <LoaderCircle className="spin" aria-label="Carregando" />}
-      {data?.own_room_available === false && <p role="status">Outro representante da sua empresa está nesta sala. Para manter o formato 1:1, aguarde ele sair; a sala será liberada automaticamente.</p>}
+      {data?.role === "importer" && Boolean(data.companies?.length) && <section aria-label="Empresas da rodada">
+        <h2>Empresas da rodada</h2>
+        <ul>{data.companies?.map((company) => <li key={company.id}>{company.name} · {company.visited ? "Já participou" : "Ainda não participou"}</li>)}</ul>
+      </section>}
       {!user && <Link className={styles.primary} href={`/entrar?next=${encodeURIComponent(`/eventos/${event.slug}/networking`)}`}>Entrar na minha conta</Link>}
       {data?.open && <span className={styles.badge}><span className={styles.pulse} /> Aguardando direcionamento · atualização automática</span>}
     </section>}

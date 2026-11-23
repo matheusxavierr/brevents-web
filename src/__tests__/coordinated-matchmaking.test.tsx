@@ -11,7 +11,7 @@ vi.mock("@/lib/api-client", () => ({ apiClient: mocks.api }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: mocks.replace }) }));
 vi.mock("@/components/session-provider", () => ({ useSession: () => ({ user: { id: 1 } }) }));
 vi.mock("@/components/home-header", () => ({ HomeHeader: () => <header>BR Events</header> }));
-vi.mock("@/components/connected-meeting-experience", () => ({ ConnectedMeetingExperience: ({ roomOverride }: { roomOverride: Room }) => <div data-testid="call">{roomOverride.company_name}</div> }));
+vi.mock("@/components/connected-meeting-experience", () => ({ ConnectedMeetingExperience: ({ roomOverride, onCallState }: { roomOverride: Room; onCallState: (joined: boolean) => void }) => <div data-testid="call">{roomOverride.company_name}<button onClick={() => onCallState(true)}>Entrar na chamada de teste</button></div> }));
 vi.mock("@/components/use-matchmaking", async (importOriginal) => ({ ...await importOriginal<object>(), useMatchmaking: () => ({ data: mocks.snapshot, error: "", now: mocks.now, refresh: mocks.refresh }) }));
 
 const event: EventData = { id: "event", name: "Encontro", slug: "encontro", description: "", starts_at: "2026-10-16T12:00:00Z", ends_at: "2026-10-16T18:00:00Z", timezone: "America/Sao_Paulo", access_mode: "registration", registration_open: true, public_config: {}, branding: {}, feature_flags: { networking_open: true } };
@@ -44,6 +44,31 @@ describe("matchmaking coordenado", () => {
     expect(mocks.api).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Encerrar reunião" }));
     await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("matchmaking/end/", { method: "POST", body: { event: event.id, round: round.id } }));
+  });
+
+  it("mostra o alerta de suporte com acesso à reunião para a coordenação", () => {
+    mocks.snapshot = { ...state, rooms: [{ room, exporter, online: true, round: { ...round, support_requested_at: event.starts_at } }] };
+    render(<MatchmakingBoard event={event} />);
+    expect(screen.getByRole("link", { name: "Entrar para prestar suporte" })).toHaveAttribute("href", "/eventos/encontro/networking/salas/room");
+    expect(screen.getByRole("link", { name: "Entrar na reunião" })).toBeInTheDocument();
+  });
+
+  it("mostra a visita anterior e impede direcionar o importador de novo", () => {
+    mocks.snapshot = { ...state, waiting: [{ ...importer, visited_rooms: [room.id] }] };
+    render(<MatchmakingBoard event={event} />);
+    fireEvent.click(screen.getByRole("button", { name: /Ana Compradora/ }));
+    expect(screen.getByText("Já participou com esta empresa")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Direcionar participante" })).toBeDisabled();
+  });
+
+  it("registra a entrada do importador e deixa pedir suporte dentro da chamada", async () => {
+    mocks.snapshot = { ...state, role: "importer", registration: importer, round, room };
+    render(<NetworkingSala event={event} roomId="room" />);
+    expect(screen.queryByRole("button", { name: "Pedir suporte" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Entrar na chamada de teste" }));
+    expect(mocks.api).toHaveBeenCalledWith("matchmaking/joined/", { method: "POST", body: { event: event.id, round: round.id } });
+    fireEvent.click(screen.getByRole("button", { name: "Pedir suporte" }));
+    await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("matchmaking/support/", { method: "POST", body: { event: event.id, round: round.id } }));
   });
 
   it("mantém o importador esperando e abre automaticamente a sala atribuída", () => {

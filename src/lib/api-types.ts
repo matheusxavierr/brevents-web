@@ -191,13 +191,14 @@ export type Registration = {
   created_at: string;
 };
 
-export type MatchmakingParticipant = { id: string; name: string; company: string; matchmaking_role: "exporter" | "importer" };
-export type MatchmakingRound = { id: string; room: string; exporter: MatchmakingParticipant; importer: MatchmakingParticipant; starts_at: string; expires_at: string; ended_at: string | null; end_reason: string };
+export type MatchmakingParticipant = { id: string; name: string; company: string; matchmaking_role: "exporter" | "importer"; visited_rooms?: string[] };
+export type MatchmakingRound = { id: string; room: string; exporter: MatchmakingParticipant; importer: MatchmakingParticipant; starts_at: string; expires_at: string; ended_at: string | null; end_reason: string; support_requested_at?: string | null };
 export type MatchmakingState = {
   server_time: string; open: boolean; role: "coordinator" | "exporter" | "importer";
   registration: MatchmakingParticipant | null; room: Room | null; round: MatchmakingRound | null;
   own_room_available?: boolean;
   waiting?: MatchmakingParticipant[];
+  companies?: Array<{ id: string; name: string; visited: boolean }>;
   rooms?: Array<{ room: Room; exporter: MatchmakingParticipant | null; online: boolean; round: MatchmakingRound | null; exporter_connected?: boolean; importer_connected?: boolean }>;
   recent?: MatchmakingRound[];
 };

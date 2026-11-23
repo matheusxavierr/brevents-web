@@ -120,6 +120,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
   const [captionClient, setCaptionClient] = useState<ZoomClient | null>(null);
   const [activeRoomMode, setActiveRoomMode] = useState<"event" | "meeting">(roomMode);
   const [mediaPreferences, setMediaPreferences] = useState<MediaPreferences>(defaultMediaPreferences);
+  const [prejoinLanguage, setPrejoinLanguage] = useState<CaptionLanguage | "">("");
   const [deviceMenu, setDeviceMenu] = useState<"audio" | "video" | null>(null);
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
   const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
@@ -552,6 +553,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
   }
 
   async function join() {
+    if (!prejoinLanguage && !autoJoin) return;
     window.sessionStorage.setItem("brevents:media-preferences", JSON.stringify(mediaPreferences));
     setState("joining");
     setError("");
@@ -817,6 +819,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
       try {
         ensureZoomSuccess(await stream.startAudio({
           microphoneId: mediaPreferences.audioDeviceId || undefined,
+          speakerId: mediaPreferences.speakerDeviceId || undefined,
           backgroundNoiseSuppression: supportsNoiseSuppression && mediaPreferences.noiseSuppression,
         }));
         const shouldEnableAudio = credentials.media_permissions.audio && mediaPreferences.audioEnabled;
@@ -1245,13 +1248,17 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
         <h1>{state === "left" ? "Você saiu da sala" : activeRoomMode === "meeting" ? "Tudo pronto para a reunião?" : "Entre no palco ao vivo"}</h1>
         <p>Escolha sua câmera e seu microfone. Você poderá trocar os dispositivos durante a chamada.</p>
         <MediaDeviceSetup value={mediaPreferences} onChange={setMediaPreferences} active={state !== "joining"} stopPreviewRef={stopPreviewRef}>
-          <label><span>Idioma que vou falar</span><select value={captions.spokenLanguage} onChange={(change) => captions.selectSpokenLanguage(change.target.value as CaptionLanguage)}>{Object.entries(captionLanguages).map(([value, language]) => <option key={value} value={value}>{language.label}</option>)}</select></label>
+          <label><span>Idioma que vou falar</span><select required value={prejoinLanguage} onChange={(change) => {
+            const language = change.target.value as CaptionLanguage;
+            setPrejoinLanguage(language);
+            captions.selectSpokenLanguage(language);
+          }}><option value="" disabled>Selecione um idioma</option>{Object.entries(captionLanguages).map(([value, language]) => <option key={value} value={value}>{language.label}</option>)}</select></label>
         </MediaDeviceSetup>
         <div className="zoom-prejoin-chat-note"><LockKeyhole size={15} /><span>Chat e transcrição disponíveis ao entrar</span></div>
         <div className="zoom-capabilities" aria-label="Recursos da sala">
           <span><Video size={15} /> Live Meeting</span>
         </div>
-        <button className="button button-primary" onClick={join} disabled={state === "joining"}>
+        <button className="button button-primary" onClick={join} disabled={state === "joining" || !prejoinLanguage}>
           {state === "joining" ? "Conectando…" : state === "left" ? "Entrar novamente" : activeRoomMode === "meeting" ? "Entrar na reunião" : "Entrar na sala"}
         </button>
         {!session.configured && <p className="zoom-setup-note">Aguardando as credenciais do Zoom Video SDK no servidor.</p>}
