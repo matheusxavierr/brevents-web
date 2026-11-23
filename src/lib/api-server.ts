@@ -1,16 +1,24 @@
 import { cookies } from "next/headers";
+import { localeCookieName, normalizeLocale } from "./i18n";
 import type { EventData, Organization, Paginated, Recording, Room, Session, Speaker } from "./api-types";
 
 const API_URL = process.env.BREVENTS_API_URL ?? "http://127.0.0.1:8000/api";
 
+export async function acceptLanguageHeader() {
+  const store = await cookies();
+  const locale = normalizeLocale(store.get(localeCookieName)?.value);
+  return locale === "pt" ? "pt-BR" : locale;
+}
+
 export async function getPublicEvent(slug: string): Promise<EventData | null> {
   try {
-    const response = await fetch(`${API_URL}/public/events/${encodeURIComponent(slug)}/`, { cache: "no-store" });
+    const language = await acceptLanguageHeader();
+    const response = await fetch(`${API_URL}/public/events/${encodeURIComponent(slug)}/`, { headers: { "Accept-Language": language }, cache: "no-store" });
     if (response.ok) return (await response.json()) as EventData;
 
     const access = (await cookies()).get("brevents_access")?.value;
     if (!access) return null;
-    const headers = { Authorization: `Bearer ${access}` };
+    const headers = { Authorization: `Bearer ${access}`, "Accept-Language": language };
     const managedResponse = await fetch(`${API_URL}/events/?managed=true`, { headers, cache: "no-store" });
     if (!managedResponse.ok) return null;
     const managed = (await managedResponse.json()) as Paginated<EventData>;
@@ -36,7 +44,7 @@ export async function getPublicEvent(slug: string): Promise<EventData | null> {
 
 export async function getPublicOrganization(slug: string): Promise<Organization | null> {
   try {
-    const response = await fetch(`${API_URL}/public/organizations/${encodeURIComponent(slug)}/`, { cache: "no-store" });
+    const response = await fetch(`${API_URL}/public/organizations/${encodeURIComponent(slug)}/`, { headers: { "Accept-Language": await acceptLanguageHeader() }, cache: "no-store" });
     if (!response.ok) return null;
     return (await response.json()) as Organization;
   } catch {

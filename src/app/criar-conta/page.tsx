@@ -1,10 +1,15 @@
 import type { Metadata } from "next";
 import { AuthForm } from "@/components/auth-form";
 import { AuthShell } from "@/components/auth-shell";
+import { getTranslator } from "@/lib/i18n/server";
 
-export const metadata: Metadata = { title: "Criar conta" };
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getTranslator();
+  return { title: t("Criar conta") };
+}
 
 export default async function RegisterPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
   const { next } = await searchParams;
-  return <AuthShell title="Crie sua conta" description="Participe de eventos e abra reuniões colaborativas na BR Events."><AuthForm mode="register" nextPath={next ?? "/"} /></AuthShell>;
+  const { t } = await getTranslator();
+  return <AuthShell title={t("Crie sua conta")} description={t("Participe de eventos e abra reuniões colaborativas na BR Events.")}><AuthForm mode="register" nextPath={next ?? "/"} /></AuthShell>;
 }

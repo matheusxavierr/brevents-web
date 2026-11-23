@@ -3,6 +3,8 @@ import "server-only";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
+import { localeCookieName, normalizeLocale, translateMessage, type Locale } from "@/lib/i18n";
+
 const API_URL = process.env.BREVENTS_API_URL ?? "http://127.0.0.1:8000/api";
 const ACCESS_COOKIE = "brevents_access";
 const REFRESH_COOKIE = "brevents_refresh";
@@ -46,10 +48,17 @@ async function refreshAccess(refresh: string): Promise<RefreshResult> {
   }
 }
 
-async function requestBackend(request: Request, path: string, access?: string, body?: ArrayBuffer) {
+export async function requestLanguage(): Promise<{ locale: Locale; acceptLanguage: string }> {
+  const store = await cookies();
+  const locale = normalizeLocale(store.get(localeCookieName)?.value);
+  return { locale, acceptLanguage: locale === "pt" ? "pt-BR" : locale };
+}
+
+async function requestBackend(request: Request, path: string, access?: string, body?: ArrayBuffer, acceptLanguage = "pt-BR") {
   const headers = new Headers();
   const contentType = request.headers.get("content-type");
   if (contentType) headers.set("Content-Type", contentType);
+  headers.set("Accept-Language", acceptLanguage);
   if (access) headers.set("Authorization", `Bearer ${access}`);
   const url = new URL(request.url);
   return fetch(`${API_URL}/${path}${url.search}`, {
@@ -62,10 +71,11 @@ async function requestBackend(request: Request, path: string, access?: string, b
 
 export async function forwardToBackend(request: Request, path: string) {
   const cookieStore = await cookies();
+  const { locale, acceptLanguage } = await requestLanguage();
   let access = cookieStore.get(ACCESS_COOKIE)?.value;
   const refresh = cookieStore.get(REFRESH_COOKIE)?.value;
   const body = request.method === "GET" || request.method === "HEAD" ? undefined : await request.arrayBuffer();
-  let backendResponse = await requestBackend(request, path, access, body);
+  let backendResponse = await requestBackend(request, path, access, body, acceptLanguage);
 
   let refreshedAccess: string | undefined;
   let invalidRefresh = false;
@@ -75,7 +85,7 @@ export async function forwardToBackend(request: Request, path: string) {
     if (refreshed.status === "refreshed") {
       refreshedAccess = refreshed.access;
       access = refreshed.access;
-      backendResponse = await requestBackend(request, path, access, body);
+      backendResponse = await requestBackend(request, path, access, body, acceptLanguage);
     } else if (refreshed.status === "invalid") {
       invalidRefresh = true;
     } else {
@@ -85,7 +95,7 @@ export async function forwardToBackend(request: Request, path: string) {
 
   if (refreshUnavailable) {
     return NextResponse.json(
-      { detail: "Não foi possível renovar sua sessão agora. Tente novamente em instantes." },
+      { detail: translateMessage(locale, "Não foi possível renovar sua sessão agora. Tente novamente em instantes.") },
       { status: 503 },
     );
   }

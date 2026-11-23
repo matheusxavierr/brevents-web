@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { API_URL, setAuthCookies } from "@/lib/backend-proxy";
+import { API_URL, requestLanguage, setAuthCookies } from "@/lib/backend-proxy";
 
 export async function POST(request: Request) {
   const payload = (await request.json()) as { name?: string; email?: string; password?: string };
+  const { acceptLanguage } = await requestLanguage();
   const registerResponse = await fetch(`${API_URL}/auth/register/`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Accept-Language": acceptLanguage },
     body: JSON.stringify(payload),
     cache: "no-store",
   });
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
 
   const tokenResponse = await fetch(`${API_URL}/auth/token/`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Accept-Language": acceptLanguage },
     body: JSON.stringify({ email: user.email, password: payload.password }),
     cache: "no-store",
   });

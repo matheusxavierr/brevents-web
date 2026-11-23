@@ -3,6 +3,8 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
 import type { Room } from "@/lib/api-types";
+import { formatDateValue, type Locale } from "@/lib/i18n";
+import { useI18n } from "../i18n-provider";
 export { listAll } from "@/lib/api-pagination";
 import styles from "./dashboard.module.css";
 
@@ -17,8 +19,8 @@ export function duration(seconds = 0) {
   return minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}min` : `${minutes}min`;
 }
 
-export function dateTime(value: string, timezone = "America/Sao_Paulo") {
-  return new Date(value).toLocaleString("pt-BR", { timeZone: timezone, dateStyle: "short", timeStyle: "short" });
+export function dateTime(value: string, timezone = "America/Sao_Paulo", locale: Locale = "pt") {
+  return formatDateValue(locale, value, { timeZone: timezone, dateStyle: "short", timeStyle: "short" });
 }
 
 export function localDateTime(value: string) {
@@ -27,6 +29,7 @@ export function localDateTime(value: string) {
 }
 
 export function Dialog({ title, children, onClose, busy = false }: { title: string; children: ReactNode; onClose: () => void; busy?: boolean }) {
+  const { t } = useI18n();
   const dialog = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
   useEffect(() => { close.current = onClose; }, [onClose]);
@@ -48,7 +51,7 @@ export function Dialog({ title, children, onClose, busy = false }: { title: stri
   }, [busy]);
   return <div className={styles.backdrop} onMouseDown={(event) => { if (!busy && event.target === event.currentTarget) onClose(); }}>
     <div ref={dialog} tabIndex={-1} className={styles.dialog} role="dialog" aria-modal="true" aria-label={title}>
-      <header><h2>{title}</h2><button type="button" aria-label="Fechar" onClick={onClose} disabled={busy}><X size={20} /></button></header>
+      <header><h2>{title}</h2><button type="button" aria-label={t("Fechar")} onClick={onClose} disabled={busy}><X size={20} /></button></header>
       {children}
     </div>
   </div>;

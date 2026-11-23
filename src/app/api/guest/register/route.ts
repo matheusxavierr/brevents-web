@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { API_URL } from "@/lib/backend-proxy";
+import { API_URL, requestLanguage } from "@/lib/backend-proxy";
+import { translateMessage } from "@/lib/i18n";
 
 function ticketCookieName(eventId: string) {
   return `brevents_ticket_${eventId.replace(/[^a-zA-Z0-9_-]/g, "")}`;
@@ -7,10 +8,11 @@ function ticketCookieName(eventId: string) {
 
 export async function POST(request: Request) {
   const payload = (await request.json()) as { event?: string; name?: string; email?: string };
-  if (!payload.event) return NextResponse.json({ detail: "Evento obrigatório." }, { status: 400 });
+  const { locale, acceptLanguage } = await requestLanguage();
+  if (!payload.event) return NextResponse.json({ detail: translateMessage(locale, "Evento obrigatório.") }, { status: 400 });
   const backendResponse = await fetch(`${API_URL}/registrations/`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Accept-Language": acceptLanguage },
     body: JSON.stringify(payload),
     cache: "no-store",
   });

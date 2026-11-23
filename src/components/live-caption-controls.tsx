@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Captions, Languages, X } from "lucide-react";
 import type { CaptionLanguage } from "@/lib/api-types";
 import { captionLanguages } from "@/lib/zoom-captions";
+import { useI18n } from "./i18n-provider";
 
 type Props = {
   canSpeak: boolean;
@@ -18,6 +19,7 @@ type Props = {
   onRetry: () => void;
 };
 export function LiveCaptionControls(props: Props) {
+  const { t } = useI18n();
   const menu = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => {
@@ -35,25 +37,25 @@ export function LiveCaptionControls(props: Props) {
   }, [menuOpen]);
   return <div className="live-caption-control" ref={menu}>
     <button type="button" className={props.captionLanguage ? "active" : "muted"} onClick={() => setMenuOpen((open) => !open)} aria-expanded={menuOpen} aria-controls="live-caption-menu">
-      <Captions size={19} /><span>{props.captionLanguage ? `CC: ${captionLanguages[props.captionLanguage].short}` : "Legendas"}</span>
+      <Captions size={19} /><span>{props.captionLanguage ? `CC: ${captionLanguages[props.captionLanguage].short}` : t("Legendas")}</span>
     </button>
-    {menuOpen && <div className="live-caption-menu" id="live-caption-menu" role="dialog" aria-label="Configurar legendas">
-      <header><span><Captions size={18} /><strong>Legendas do Zoom</strong></span><button type="button" onClick={() => setMenuOpen(false)} aria-label="Fechar"><X size={16} /></button></header>
-      <p>Em qual idioma você quer ler?</p>
-      {!props.ready && !props.error && <p role="status">Conectando às legendas do Zoom…</p>}
+    {menuOpen && <div className="live-caption-menu" id="live-caption-menu" role="dialog" aria-label={t("Configurar legendas")}>
+      <header><span><Captions size={18} /><strong>{t("Legendas do Zoom")}</strong></span><button type="button" onClick={() => setMenuOpen(false)} aria-label={t("Fechar")}><X size={16} /></button></header>
+      <p>{t("Em qual idioma você quer ler?")}</p>
+      {!props.ready && !props.error && <p role="status">{t("Conectando às legendas do Zoom…")}</p>}
       <div className="live-caption-options">
-        <button type="button" className={!props.captionLanguage ? "selected" : ""} onClick={() => props.onCaptionLanguageChange(null)}>Ocultar legendas</button>
+        <button type="button" className={!props.captionLanguage ? "selected" : ""} onClick={() => props.onCaptionLanguageChange(null)}>{t("Ocultar legendas")}</button>
         {props.translationLanguages.map((language) => <button type="button" className={props.captionLanguage === language ? "selected" : ""} onClick={() => props.onCaptionLanguageChange(language)} key={language}>{captionLanguages[language].label}</button>)}
       </div>
       {props.canSpeak && <div className="live-caption-speaker-setting">
-        <span><Languages size={16} /><span><strong>Idioma da minha fala</strong><small>Informe o idioma usado no seu microfone.</small></span></span>
-        <select value={props.spokenLanguage} onChange={(event) => props.onSpokenLanguageChange(event.target.value as CaptionLanguage)} aria-label="Idioma da minha fala" disabled={!props.ready}>
+        <span><Languages size={16} /><span><strong>{t("Idioma da minha fala")}</strong><small>{t("Informe o idioma usado no seu microfone.")}</small></span></span>
+        <select value={props.spokenLanguage} onChange={(event) => props.onSpokenLanguageChange(event.target.value as CaptionLanguage)} aria-label={t("Idioma da minha fala")} disabled={!props.ready}>
           {props.availableLanguages.map((language) => <option value={language} key={language}>{captionLanguages[language].label}</option>)}
         </select>
       </div>}
-      {props.ready && <small className="live-caption-listening"><span /> {props.canSpeak && props.microphoneOn ? "Zoom transcrevendo seu microfone" : "Transcrição do Zoom ativa"}</small>}
-      <p><small>Ocultar legendas não interrompe a transcrição da sala.</small></p>
-      {props.error && <div className="live-caption-warning" role="alert"><p>{props.error}</p><button type="button" onClick={props.onRetry}>Tentar novamente</button></div>}
+      {props.ready && <small className="live-caption-listening"><span /> {props.canSpeak && props.microphoneOn ? t("Zoom transcrevendo seu microfone") : t("Transcrição do Zoom ativa")}</small>}
+      <p><small>{t("Ocultar legendas não interrompe a transcrição da sala.")}</small></p>
+      {props.error && <div className="live-caption-warning" role="alert"><p>{props.error}</p><button type="button" onClick={props.onRetry}>{t("Tentar novamente")}</button></div>}
     </div>}
   </div>;
 }

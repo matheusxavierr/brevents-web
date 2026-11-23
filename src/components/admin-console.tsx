@@ -5,7 +5,9 @@ import Link from "next/link";
 import { CalendarRange, LogOut, Pencil, ShieldCheck, Trash2, Users, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Brand } from "./brand";
+import { LanguageSwitcher } from "./language-switcher";
 import { AdminEventPanel } from "./admin-event-panel";
+import { useI18n } from "./i18n-provider";
 import { useSession } from "./session-provider";
 import { apiClient } from "@/lib/api-client";
 import type { Paginated, User } from "@/lib/api-types";
@@ -19,6 +21,7 @@ type AdminEvent = {
 };
 
 export function AdminConsole() {
+  const { t } = useI18n();
   const router = useRouter();
   const { user: sessionUser } = useSession();
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -45,11 +48,11 @@ export function AdminConsole() {
     let active = true;
     async function bootstrap() {
       try { await load(); }
-      catch (reason) { if (active) setError(reason instanceof Error ? reason.message : "Falha ao abrir o admin."); }
+      catch (reason) { if (active) setError(reason instanceof Error ? reason.message : t("Falha ao abrir o admin.")); }
     }
     void bootstrap();
     return () => { active = false; };
-  }, [load]);
+  }, [load, t]);
 
   async function submitUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError("");
@@ -60,28 +63,28 @@ export function AdminConsole() {
     try {
       if (editingUser) {
         await apiClient(`admin/users/${editingUser.id}/`, { method: "PATCH", body: data });
-        setNotice("Usuário atualizado.");
+        setNotice(t("Usuário atualizado."));
       } else {
         await apiClient("admin/users/", { method: "POST", body: data });
-        setNotice("Usuário criado.");
+        setNotice(t("Usuário criado."));
       }
       setEditingUser(null); form.reset(); await load();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Não foi possível salvar o usuário."); }
+    } catch (reason) { setError(reason instanceof Error ? reason.message : t("Não foi possível salvar o usuário.")); }
   }
 
   async function updateUser(user: AdminUser, changes: Partial<AdminUser>) {
     try {
       await apiClient(`admin/users/${user.id}/`, { method: "PATCH", body: changes });
-      setNotice("Usuário atualizado."); await load();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Não foi possível atualizar o usuário."); }
+      setNotice(t("Usuário atualizado.")); await load();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : t("Não foi possível atualizar o usuário.")); }
   }
 
   async function deleteUser(user: AdminUser) {
-    if (!window.confirm(`Excluir ${user.username}? Esta ação não pode ser desfeita.`)) return;
+    if (!window.confirm(t("Excluir {name}? Esta ação não pode ser desfeita.", { name: user.username }))) return;
     try {
       await apiClient(`admin/users/${user.id}/`, { method: "DELETE" });
-      setNotice("Usuário excluído."); await load();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Não foi possível excluir o usuário."); }
+      setNotice(t("Usuário excluído.")); await load();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : t("Não foi possível excluir o usuário.")); }
   }
 
   async function submitEvent(event: FormEvent<HTMLFormElement>) {
@@ -101,17 +104,17 @@ export function AdminConsole() {
     };
     try {
       await apiClient("admin/events/", { method: "POST", body });
-      setNotice("Evento criado.");
+      setNotice(t("Evento criado."));
       form.reset(); await load();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Não foi possível salvar o evento."); }
+    } catch (reason) { setError(reason instanceof Error ? reason.message : t("Não foi possível salvar o evento.")); }
   }
 
   async function deleteEvent(item: AdminEvent) {
-    if (!window.confirm(`Excluir ${item.name}? Esta ação remove também salas e inscrições.`)) return;
+    if (!window.confirm(t("Excluir {name}? Esta ação remove também salas e inscrições.", { name: item.name }))) return;
     try {
       await apiClient(`admin/events/${item.id}/`, { method: "DELETE" });
-      setNotice("Evento excluído."); await load();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Não foi possível excluir o evento."); }
+      setNotice(t("Evento excluído.")); await load();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : t("Não foi possível excluir o evento.")); }
   }
 
   async function logout() { await fetch("/api/auth/logout", { method: "POST" }); router.push("/"); router.refresh(); }
@@ -120,56 +123,56 @@ export function AdminConsole() {
     <main className="admin-console">
       <aside>
         <Brand href="/" />
-        <span className="admin-badge"><ShieldCheck size={15} /> Superadmin</span>
+        <span className="admin-badge"><ShieldCheck size={15} /> {t("Superadmin")}</span>
         <nav>
-          <button className={tab === "users" && !managedEvent ? "active" : ""} onClick={() => { setManagedEventId(null); setTab("users"); }}><Users size={18} /> Usuários</button>
-          <button className={tab === "events" ? "active" : ""} onClick={() => { setManagedEventId(null); setTab("events"); }}><CalendarRange size={18} /> Todos os eventos</button>
+          <button className={tab === "users" && !managedEvent ? "active" : ""} onClick={() => { setManagedEventId(null); setTab("users"); }}><Users size={18} /> {t("Usuários")}</button>
+          <button className={tab === "events" ? "active" : ""} onClick={() => { setManagedEventId(null); setTab("events"); }}><CalendarRange size={18} /> {t("Todos os eventos")}</button>
         </nav>
-        <div className="admin-side-footer"><Link href="/">Ver site</Link><button onClick={logout}><LogOut size={16} /> Sair</button></div>
+        <div className="admin-side-footer"><LanguageSwitcher className="admin-language" /><Link href="/">{t("Ver site")}</Link><button onClick={logout}><LogOut size={16} /> {t("Sair")}</button></div>
       </aside>
 
       <section className="admin-content">
         {managedEvent ? <AdminEventPanel event={managedEvent} users={users} onBack={() => setManagedEventId(null)} onEventUpdated={load} /> : <>
-        <header><div><p className="eyebrow">Administração global</p><h1>{tab === "users" ? "Usuários" : "Eventos"}</h1></div><span>{tab === "users" ? users.length : events.length} registros</span></header>
+        <header><div><p className="eyebrow">{t("Administração global")}</p><h1>{tab === "users" ? t("Usuários") : t("Eventos")}</h1></div><span>{t("{count} registros", { count: tab === "users" ? users.length : events.length })}</span></header>
         {notice && <p className="form-success">{notice}</p>}
         {error && <p className="form-error">{error}</p>}
 
         {tab === "users" ? (
           <div className="admin-global-grid">
             <section className="dashboard-card admin-editor">
-              <div className="card-header"><h2>{editingUser ? "Editar usuário" : "Novo usuário"}</h2>{editingUser && <button className="icon-button" onClick={() => setEditingUser(null)} aria-label="Cancelar edição"><X size={16} /></button>}</div>
+              <div className="card-header"><h2>{editingUser ? t("Editar usuário") : t("Novo usuário")}</h2>{editingUser && <button className="icon-button" onClick={() => setEditingUser(null)} aria-label={t("Cancelar edição")}><X size={16} /></button>}</div>
               <form className="compact-form" key={editingUser?.id ?? "new-user"} onSubmit={submitUser}>
-                <input name="username" placeholder="Usuário" defaultValue={editingUser?.username} required />
-                <input name="email" type="email" placeholder="E-mail" defaultValue={editingUser?.email} required />
-                <div className="form-grid"><input name="first_name" placeholder="Nome" defaultValue={editingUser?.first_name} /><input name="last_name" placeholder="Sobrenome" defaultValue={editingUser?.last_name} /></div>
-                <input name="password" type="password" minLength={8} placeholder={editingUser ? "Nova senha (opcional)" : "Senha inicial"} required={!editingUser} />
-                <select name="account_type" defaultValue={editingUser?.account_type ?? "attendee"}><option value="attendee">Participante</option><option value="organizer">Organizador</option></select>
-                <label className="admin-checkbox"><input name="is_active" type="checkbox" value="true" defaultChecked={editingUser?.is_active ?? true} /> Conta ativa</label>
-                <button className="button button-primary">{editingUser ? "Salvar alterações" : "Criar usuário"}</button>
+                <input name="username" placeholder={t("Usuário")} defaultValue={editingUser?.username} required />
+                <input name="email" type="email" placeholder={t("E-mail")} defaultValue={editingUser?.email} required />
+                <div className="form-grid"><input name="first_name" placeholder={t("Nome")} defaultValue={editingUser?.first_name} /><input name="last_name" placeholder={t("Sobrenome")} defaultValue={editingUser?.last_name} /></div>
+                <input name="password" type="password" minLength={8} placeholder={editingUser ? t("Nova senha (opcional)") : t("Senha inicial")} required={!editingUser} />
+                <select name="account_type" defaultValue={editingUser?.account_type ?? "attendee"}><option value="attendee">{t("Participante")}</option><option value="organizer">{t("Organizador")}</option></select>
+                <label className="admin-checkbox"><input name="is_active" type="checkbox" value="true" defaultChecked={editingUser?.is_active ?? true} /> {t("Conta ativa")}</label>
+                <button className="button button-primary">{editingUser ? t("Salvar alterações") : t("Criar usuário")}</button>
               </form>
             </section>
             <section className="dashboard-card admin-global-list">
-              <div className="card-header"><h2>Contas cadastradas</h2></div>
-              {users.map((user) => <article key={user.id}><div><strong>{user.first_name || user.username} {user.last_name}</strong><span>{user.email} · @{user.username}{user.is_superuser ? " · superadmin" : ""}</span></div><select value={user.account_type} onChange={(event) => updateUser(user, { account_type: event.target.value as AdminUser["account_type"] })} disabled={user.is_superuser}><option value="attendee">Participante</option><option value="organizer">Organizador</option></select><label><input type="checkbox" checked={user.is_active} onChange={(event) => updateUser(user, { is_active: event.target.checked })} disabled={user.is_superuser} /> Ativo</label><button className="icon-button" onClick={() => setEditingUser(user)} aria-label={`Editar ${user.username}`}><Pencil size={16} /></button><button className="icon-button danger" onClick={() => deleteUser(user)} aria-label={`Excluir ${user.username}`} disabled={user.is_superuser}><Trash2 size={16} /></button></article>)}
+              <div className="card-header"><h2>{t("Contas cadastradas")}</h2></div>
+              {users.map((user) => <article key={user.id}><div><strong>{user.first_name || user.username} {user.last_name}</strong><span>{user.email} · @{user.username}{user.is_superuser ? ` · ${t("superadmin")}` : ""}</span></div><select value={user.account_type} onChange={(event) => updateUser(user, { account_type: event.target.value as AdminUser["account_type"] })} disabled={user.is_superuser}><option value="attendee">{t("Participante")}</option><option value="organizer">{t("Organizador")}</option></select><label><input type="checkbox" checked={user.is_active} onChange={(event) => updateUser(user, { is_active: event.target.checked })} disabled={user.is_superuser} /> {t("Ativo")}</label><button className="icon-button" onClick={() => setEditingUser(user)} aria-label={t("Editar {name}", { name: user.username })}><Pencil size={16} /></button><button className="icon-button danger" onClick={() => deleteUser(user)} aria-label={t("Excluir {name}", { name: user.username })} disabled={user.is_superuser}><Trash2 size={16} /></button></article>)}
             </section>
           </div>
         ) : (
           <div className="admin-global-grid">
             <section className="dashboard-card admin-editor">
-              <div className="card-header"><h2>Novo evento</h2></div>
+              <div className="card-header"><h2>{t("Novo evento")}</h2></div>
               <form className="compact-form" onSubmit={submitEvent}>
-                <input name="name" placeholder="Nome do evento" required />
-                <input name="slug" placeholder="slug-do-evento" required />
-                <textarea name="description" placeholder="Descrição" rows={3} />
-                <select name="owner" defaultValue="" required><option value="">Organizador responsável</option>{users.filter((user) => user.account_type === "organizer" || user.is_superuser).map((user) => <option key={user.id} value={user.id}>{user.first_name || user.username}</option>)}</select>
+                <input name="name" placeholder={t("Nome do evento")} required />
+                <input name="slug" placeholder={t("slug-do-evento")} required />
+                <textarea name="description" placeholder={t("Descrição")} rows={3} />
+                <select name="owner" defaultValue="" required><option value="">{t("Organizador responsável")}</option>{users.filter((user) => user.account_type === "organizer" || user.is_superuser).map((user) => <option key={user.id} value={user.id}>{user.first_name || user.username}</option>)}</select>
                 <div className="form-grid"><input name="starts_at" type="datetime-local" required /><input name="ends_at" type="datetime-local" required /></div>
-                <div className="form-grid"><select name="access_mode" defaultValue="public"><option value="public">Público</option><option value="registration">Conta obrigatória</option><option value="invite">Convidados</option></select><select name="status" defaultValue="draft"><option value="draft">Rascunho</option><option value="published">Publicado</option><option value="ended">Encerrado</option><option value="archived">Arquivado</option></select></div>
-                <button className="button button-primary">Criar evento</button>
+                <div className="form-grid"><select name="access_mode" defaultValue="public"><option value="public">{t("Público")}</option><option value="registration">{t("Conta obrigatória")}</option><option value="invite">{t("Convidados")}</option></select><select name="status" defaultValue="draft"><option value="draft">{t("Rascunho")}</option><option value="published">{t("Publicado")}</option><option value="ended">{t("Encerrado")}</option><option value="archived">{t("Arquivado")}</option></select></div>
+                <button className="button button-primary">{t("Criar evento")}</button>
               </form>
             </section>
             <section className="dashboard-card admin-global-list">
-              <div className="card-header"><h2>Todos os eventos</h2></div>
-              {events.map((item) => <article key={item.id}><div><strong>{item.name}</strong><span>/{item.slug} · dono #{item.owner} · {item.status}</span></div><button className="button button-quiet" type="button" onClick={() => setManagedEventId(item.id)}>Gerenciar</button><button className="icon-button danger" onClick={() => deleteEvent(item)} aria-label={`Excluir ${item.name}`}><Trash2 size={16} /></button></article>)}
+              <div className="card-header"><h2>{t("Todos os eventos")}</h2></div>
+              {events.map((item) => <article key={item.id}><div><strong>{item.name}</strong><span>{t("/{slug} · dono #{owner} · {status}", { slug: item.slug, owner: item.owner, status: item.status })}</span></div><button className="button button-quiet" type="button" onClick={() => setManagedEventId(item.id)}>{t("Gerenciar")}</button><button className="icon-button danger" onClick={() => deleteEvent(item)} aria-label={t("Excluir {name}", { name: item.name })}><Trash2 size={16} /></button></article>)}
             </section>
           </div>
         )}

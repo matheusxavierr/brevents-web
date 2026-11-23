@@ -4,9 +4,12 @@ import { ArrowLeft } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+import { useI18n } from "./i18n-provider";
+
 export function NavigationFeedback() {
   const pathname = usePathname();
   const router = useRouter();
+  const { t } = useI18n();
   const [targetPath, setTargetPath] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navigating = targetPath !== null && targetPath !== pathname;
@@ -48,8 +51,8 @@ export function NavigationFeedback() {
 
   return (
     <>
-      {pathname !== "/" && <button className="route-back-button" type="button" onClick={goBack} aria-label="Voltar para a página anterior"><ArrowLeft size={17} /><span>Voltar</span></button>}
-      {navigating && <div className="navigation-progress" role="status" aria-live="polite"><span aria-hidden="true" /><span className="sr-only">Abrindo página…</span></div>}
+      {pathname !== "/" && <button className="route-back-button" type="button" onClick={goBack} aria-label={t("Voltar para a página anterior")}><ArrowLeft size={17} /><span>{t("Voltar")}</span></button>}
+      {navigating && <div className="navigation-progress" role="status" aria-live="polite"><span aria-hidden="true" /><span className="sr-only">{t("Abrindo página…")}</span></div>}
     </>
   );
 }

@@ -1,7 +1,11 @@
+"use client";
+
 import { StatusPill } from "./status-pill";
+import { useI18n } from "./i18n-provider";
 import type { Session } from "@/lib/demo-data";
 
 export function SessionList({ items }: { items: Session[] }) {
+  const { t } = useI18n();
   return (
     <div className="schedule-list">
       {items.map((session) => (
@@ -11,7 +15,7 @@ export function SessionList({ items }: { items: Session[] }) {
             <h3 className="schedule-title">{session.title}</h3>
             <p>{session.speaker} · {session.room}</p>
           </div>
-          <span className="track-label"><span className="track-color" />{session.track}</span>
+          <span className="track-label"><span className="track-color" />{t(session.track)}</span>
           <StatusPill status={session.status} />
         </article>
       ))}

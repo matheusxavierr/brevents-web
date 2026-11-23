@@ -1,4 +1,12 @@
+import { localeCookieName, normalizeLocale, translateMessage } from "@/lib/i18n";
+
 type ApiOptions = Omit<RequestInit, "body"> & { body?: unknown };
+
+function currentLocale() {
+  if (typeof document === "undefined") return "pt" as const;
+  const match = document.cookie.match(new RegExp(`(?:^|; )${localeCookieName}=([^;]*)`));
+  return normalizeLocale(match?.[1]);
+}
 
 export class ApiError extends Error {
   constructor(public status: number, public details: unknown) {
@@ -33,5 +41,5 @@ export function readError(value: unknown): string {
     const messages = Object.values(value).flatMap((item) => (Array.isArray(item) ? item : [item]));
     return messages.map(readError).join(" ");
   }
-  return "Não foi possível concluir a operação.";
+  return translateMessage(currentLocale(), "Não foi possível concluir a operação.");
 }

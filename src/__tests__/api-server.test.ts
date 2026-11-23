@@ -19,6 +19,6 @@ describe("prévia do evento", () => {
     const event = await getPublicEvent("novo");
     expect(event?.speakers).toEqual([{ id: "speaker", name: "Marina", bio: "Inovação", avatar_url: "" }]);
     expect(event?.rooms?.map((room) => room.id)).toEqual(["room"]);
-    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/speakers/?event=draft"), expect.objectContaining({ headers: { Authorization: "Bearer test-token" }, cache: "no-store" }));
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/speakers/?event=draft"), expect.objectContaining({ headers: { Authorization: "Bearer test-token", "Accept-Language": "pt-BR" }, cache: "no-store" }));
   });
 });

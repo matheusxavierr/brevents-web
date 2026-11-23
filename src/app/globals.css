@@ -2832,3 +2832,35 @@ section:nth-of-type(even) .eyebrow::before { background-image: url("/brand/star-
   .live-page:not(.meeting-live-page):has(.zoom-entry) .live-exit-desktop { display: none; }
   .live-page:not(.meeting-live-page):has(.zoom-entry) .live-exit-mobile { display: inline; }
 }
+
+.language-switcher { display: inline-flex; align-items: center; gap: 6px; color: inherit; font-size: .72rem; white-space: nowrap; }
+.language-switcher select { appearance: none; border: 1px solid currentColor; border-radius: 6px; background: transparent; color: inherit; padding: 4px 6px; cursor: pointer; font: inherit; font-size: .72rem; }
+.language-switcher select option { color: var(--ink); background: white; }
+.language-switcher svg { flex: none; opacity: .75; }
+.home-header .language-switcher { color: rgb(255 255 255 / 78%); }
+.home-header .language-switcher select { border-color: rgb(255 255 255 / 34%); }
+.home-header.menu-open .language-switcher { min-height: 44px; padding: 0 12px; }
+.auth-language-inline { display: inline-flex; }
+.auth-card-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.auth-card-top .eyebrow { margin-bottom: 0; }
+@media (min-width: 900px) { .auth-language-inline { color: var(--muted); } .auth-language-inline select { border-color: var(--line); } }
+@media (max-width: 899px) { .home-header .language-switcher { margin-left: 2px; } }
+
+.builder-header-actions { display: flex; align-items: center; gap: 16px; }
+.builder-language { color: var(--muted); }
+.meeting-bootstrap-language { color: rgb(255 255 255 / 70%); }
+.dashboard-language { color: var(--muted); }
+.dashboard-language select { border-color: var(--line); }
+.admin-language { color: var(--muted); }
+.admin-language select { border-color: var(--line); }
+.admin-side-footer { flex-wrap: wrap; }
+.admin-side-footer .admin-language { width: 100%; margin-bottom: 4px; }
+.live-language { color: rgb(255 255 255 / 76%); }
+.live-language select { border-color: rgb(255 255 255 / 34%); }
+.event-unavailable-language { color: var(--muted); margin-bottom: 12px; }
+.event-unavailable-language select { border-color: var(--line); }
+@media (max-width: 640px) {
+  .live-language { display: none; }
+  .builder-header-actions { gap: 8px; }
+  .builder-language select { max-width: 70px; }
+}

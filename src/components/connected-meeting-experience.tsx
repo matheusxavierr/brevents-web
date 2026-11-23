@@ -8,19 +8,28 @@ import { CSSProperties, FormEvent, PointerEvent, useCallback, useEffect, useRef,
 import { ApiError, apiClient } from "@/lib/api-client";
 import type { ChatChannel, ChatMessage, EventData, Paginated, Room, User } from "@/lib/api-types";
 import { isFatalRealtimeClose, realtimeReconnectDelay, websocketBaseUrl } from "@/lib/realtime";
-import { formatChatTime } from "@/lib/format-date";
 import { normalizeRealtimeChatMessage } from "@/lib/chat";
+import { useI18n } from "./i18n-provider";
 import { useTranscript } from "./use-transcript";
 import { TranscriptDownload, TranscriptPanel } from "./transcript-panel";
 import { Brand } from "./brand";
+import { LanguageSwitcher } from "./language-switcher";
 import { ZoomVideoRoom } from "./zoom-video-room";
 import { useSession } from "./session-provider";
 
 type MeetingTab = "chat" | "transcript";
 type JoinResponse = { token: string };
 
+function formatCaptionTime(intlLocale: string, value: string) {
+  if (!value) return "--:--";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "--:--";
+  return new Intl.DateTimeFormat(intlLocale, { hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
 export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/", onExit, exitLabel = "Encerrar conversa", autoJoin = false, onCallState, onCallLeave }: { event: EventData; roomOverride?: Room; exitHref?: string; onExit?: () => void; exitLabel?: string; autoJoin?: boolean; onCallState?: (joined: boolean) => void; onCallLeave?: () => void }) {
   const router = useRouter();
+  const { t, intlLocale } = useI18n();
   const { user: sessionUser } = useSession();
   const room = roomOverride ?? event.rooms?.find((item) => item.mode === "meeting" && item.zoom_session) ?? event.rooms?.[0];
   const [user, setUser] = useState<User | null>(null);
@@ -37,7 +46,7 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
   const joinedOnce = useRef(false);
   const callState = useRef(onCallState);
   useEffect(() => { callState.current = onCallState; }, [onCallState]);
-  const transcript = useTranscript({ sessionId: room?.zoom_session?.id, eventId: event.id, enabled: hasJoined, refreshKey: inRoom, title: event.name, roomName: room?.name ?? "Reunião", timeZone: event.timezone });
+  const transcript = useTranscript({ sessionId: room?.zoom_session?.id, eventId: event.id, enabled: hasJoined, refreshKey: inRoom, title: event.name, roomName: room?.name ?? t("Reunião"), timeZone: event.timezone });
   const captions = transcript.captions;
   const changeJoined = useCallback((joined: boolean) => {
     callState.current?.(joined);
@@ -56,11 +65,11 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
 
   useEffect(() => {
     const handleSessionExpired = () => {
-      setRealtimeNotice("Sua sessão expirou. Entre novamente para continuar usando chat e transcrição.");
+      setRealtimeNotice(t("Sua sessão expirou. Entre novamente para continuar usando chat e transcrição."));
     };
     window.addEventListener("brevents:session-expired", handleSessionExpired);
     return () => window.removeEventListener("brevents:session-expired", handleSessionExpired);
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!room) return;
@@ -96,7 +105,7 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
         setAccessGranted(true);
       } catch (reason) {
         console.error("Não foi possível entrar na reunião.", reason);
-        setError(reason instanceof Error ? reason.message : "Não foi possível entrar na reunião.");
+        setError(reason instanceof Error ? reason.message : t("Não foi possível entrar na reunião."));
       }
     }
 
@@ -105,7 +114,7 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
       cancelled = true;
       socket.current?.close();
     };
-  }, [event.id, room, router, sessionUser]);
+  }, [event.id, room, router, sessionUser, t]);
 
   useEffect(() => {
     if (!room || !inRoom) return;
@@ -154,10 +163,10 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
           setConnected(false);
           if (cancelled) return;
           if (isFatalRealtimeClose(closeEvent.code)) {
-            setRealtimeNotice("Seu acesso ao chat e à transcrição desta reunião foi encerrado.");
+            setRealtimeNotice(t("Seu acesso ao chat e à transcrição desta reunião foi encerrado."));
             return;
           }
-          setRealtimeNotice("Reconectando chat e transcrição…");
+          setRealtimeNotice(t("Reconectando chat e transcrição…"));
           reconnectTimer = setTimeout(() => {
             reconnectAttempt += 1;
             void connectCollaboration();
@@ -167,10 +176,10 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
         console.error("Não foi possível abrir o chat da reunião.", reason);
         if (cancelled) return;
         if (reason instanceof ApiError && reason.status === 401) {
-          setRealtimeNotice("Sua sessão expirou. Entre novamente para continuar usando chat e transcrição.");
+          setRealtimeNotice(t("Sua sessão expirou. Entre novamente para continuar usando chat e transcrição."));
           return;
         }
-        setRealtimeNotice("Reconectando chat e transcrição…");
+        setRealtimeNotice(t("Reconectando chat e transcrição…"));
         reconnectTimer = setTimeout(() => {
           reconnectAttempt += 1;
           void connectCollaboration();
@@ -189,7 +198,7 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
       setMessages([]);
       setRealtimeNotice("");
     };
-  }, [event.id, inRoom, room]);
+  }, [event.id, inRoom, room, t]);
 
   useEffect(() => {
     const content = interactionContentRef.current;
@@ -234,58 +243,59 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
     router.push(exitHref);
   }
 
-  if (!room) return <main className="empty-state"><h1>Esta reunião não possui uma sala.</h1><Link className="button button-secondary" href="/">Voltar ao início</Link></main>;
+  if (!room) return <main className="empty-state"><h1>{t("Esta reunião não possui uma sala.")}</h1><Link className="button button-secondary" href="/">{t("Voltar ao início")}</Link></main>;
 
   return (
     <main className="live-page meeting-live-page">
       <header className="live-header">
         <div className="container live-header-inner">
           <Brand />
-          <span className="live-header-title">{event.name} · {inRoom ? connected ? "conectado" : "reunião ativa · reconectando chat" : hasJoined ? "fora da sala" : "pré-sala"}</span>
-          <button className="button live-exit" type="button" onClick={() => setExitConfirmationOpen(true)}><ChevronLeft size={16} /><span className="live-exit-desktop">{onExit ? exitLabel : "Voltar pra Home"}</span><span className="live-exit-mobile">Voltar</span></button>
+          <span className="live-header-title">{event.name} · {inRoom ? connected ? t("conectado") : t("reunião ativa · reconectando chat") : hasJoined ? t("fora da sala") : t("pré-sala")}</span>
+          <LanguageSwitcher className="live-language" />
+          <button className="button live-exit" type="button" onClick={() => setExitConfirmationOpen(true)}><ChevronLeft size={16} /><span className="live-exit-desktop">{onExit ? t(exitLabel) : t("Voltar pra Home")}</span><span className="live-exit-mobile">{t("Voltar")}</span></button>
         </div>
       </header>
       <div className={`live-layout${interactionHidden ? " meeting-panel-hidden" : ""}${!hasJoined ? " meeting-prejoin-layout" : ""}${sheetDragging ? " meeting-sheet-dragging" : ""}${sheetHeight === 5 ? " meeting-sheet-collapsed" : ""}`} style={{ "--meeting-sheet-height": `${sheetHeight}dvh` } as CSSProperties}>
-        <section className="video-column" aria-label="Reunião ao vivo">
+        <section className="video-column" aria-label={t("Reunião ao vivo")}>
           <div className="video-player">
             {accessGranted && room.zoom_session
               ? <ZoomVideoRoom session={room.zoom_session} eventId={event.id} roomMode="meeting" onCaption={transcript.addCaption} onJoinedChange={changeJoined} autoJoin={autoJoin} endLiveOnLeave={!room.coordinated} onLeave={onCallLeave} />
-              : <div className="video-center"><span className="navigation-spinner" /><p>Preparando sua reunião…</p></div>}
+              : <div className="video-center"><span className="navigation-spinner" /><p>{t("Preparando sua reunião…")}</p></div>}
           </div>
           {error && <p className="live-error" role="alert">{error}</p>}
           {realtimeNotice && <p className="live-error" role="status">{realtimeNotice}</p>}
         </section>
         <aside className={`interaction-panel meeting-interaction-panel${hasJoined ? "" : " meeting-interaction-locked"}`}>
-          {hasJoined && <button type="button" className="meeting-sheet-handle" aria-label="Arrastar para ajustar o chat" aria-expanded={sheetHeight !== 5} onPointerDown={startSheetDrag} onPointerMove={moveSheetDrag} onPointerUp={endSheetDrag} onPointerCancel={endSheetDrag} onKeyDown={(event) => { if (event.key === "ArrowUp" || event.key === "ArrowDown") { event.preventDefault(); setSheetHeight((height) => event.key === "ArrowUp" ? height === 5 ? 32 : 50 : height === 50 ? 32 : 5); } }}><span /></button>}
-          {hasJoined && <button className="meeting-panel-toggle" type="button" aria-label={interactionHidden ? "Mostrar chat e transcrição" : "Ocultar chat e transcrição"} aria-expanded={!interactionHidden} onClick={() => setInteractionHidden((current) => !current)}>{interactionHidden ? <PanelRightOpen size={17} /> : <PanelRightClose size={17} />}</button>}
+          {hasJoined && <button type="button" className="meeting-sheet-handle" aria-label={t("Arrastar para ajustar o chat")} aria-expanded={sheetHeight !== 5} onPointerDown={startSheetDrag} onPointerMove={moveSheetDrag} onPointerUp={endSheetDrag} onPointerCancel={endSheetDrag} onKeyDown={(event) => { if (event.key === "ArrowUp" || event.key === "ArrowDown") { event.preventDefault(); setSheetHeight((height) => event.key === "ArrowUp" ? height === 5 ? 32 : 50 : height === 50 ? 32 : 5); } }}><span /></button>}
+          {hasJoined && <button className="meeting-panel-toggle" type="button" aria-label={interactionHidden ? t("Mostrar chat e transcrição") : t("Ocultar chat e transcrição")} aria-expanded={!interactionHidden} onClick={() => setInteractionHidden((current) => !current)}>{interactionHidden ? <PanelRightOpen size={17} /> : <PanelRightClose size={17} />}</button>}
           {!hasJoined ? <div className="meeting-access-locked">
             <span><LockKeyhole size={22} /></span>
-            <strong>Chat e transcrição da reunião</strong>
-            <p>Entre na reunião para acessar a conversa e acompanhar a transcrição.</p>
+            <strong>{t("Chat e transcrição da reunião")}</strong>
+            <p>{t("Entre na reunião para acessar a conversa e acompanhar a transcrição.")}</p>
           </div> : <>
           <div className="interaction-tabs" role="tablist">
-            <button className={`interaction-tab${tab === "chat" ? " active" : ""}`} role="tab" aria-selected={tab === "chat"} onClick={() => setTab("chat")}><MessageSquare size={15} /> Chat</button>
-            <button className={`interaction-tab${tab === "transcript" ? " active" : ""}`} role="tab" aria-selected={tab === "transcript"} onClick={() => setTab("transcript")}><FileText size={15} /> Transcrição</button>
+            <button className={`interaction-tab${tab === "chat" ? " active" : ""}`} role="tab" aria-selected={tab === "chat"} onClick={() => setTab("chat")}><MessageSquare size={15} /> {t("Chat")}</button>
+            <button className={`interaction-tab${tab === "transcript" ? " active" : ""}`} role="tab" aria-selected={tab === "transcript"} onClick={() => setTab("transcript")}><FileText size={15} /> {t("Transcrição")}</button>
           </div>
           <div className="interaction-content" ref={interactionContentRef}>
             {tab === "chat" && (messages.length
-              ? messages.map((item) => <article className="message" key={item.id}><span className="avatar">{(item.sender?.first_name || item.sender?.name || item.sender?.username || "?").slice(0, 2).toUpperCase()}</span><div><strong>{item.sender ? item.sender.name || `${item.sender.first_name ?? ""} ${item.sender.last_name ?? ""}`.trim() || item.sender.username : "Participante"}</strong><time>{formatChatTime(item.created_at)}</time><p>{item.body}</p></div></article>)
-              : <div className="meeting-panel-empty"><MessageSquare size={24} /><strong>Conversa aberta</strong><span>As mensagens da reunião aparecerão aqui.</span></div>)}
+              ? messages.map((item) => <article className="message" key={item.id}><span className="avatar">{(item.sender?.first_name || item.sender?.name || item.sender?.username || "?").slice(0, 2).toUpperCase()}</span><div><strong>{item.sender ? item.sender.name || `${item.sender.first_name ?? ""} ${item.sender.last_name ?? ""}`.trim() || item.sender.username : t("Participante")}</strong><time>{formatCaptionTime(intlLocale, item.created_at)}</time><p>{item.body}</p></div></article>)
+              : <div className="meeting-panel-empty"><MessageSquare size={24} /><strong>{t("Conversa aberta")}</strong><span>{t("As mensagens da reunião aparecerão aqui.")}</span></div>)}
             {tab === "transcript" && <TranscriptPanel {...transcript} ended={!inRoom} />}
           </div>
-          {tab === "chat" && inRoom && <form className="composer" onSubmit={sendMessage}><label className="sr-only" htmlFor="meeting-chat-message">Mensagem</label><input id="meeting-chat-message" value={message} onChange={(event) => setMessage(event.target.value)} placeholder={user ? `Mensagem como ${user.first_name || user.username}` : "Escreva uma mensagem"} /><button className="icon-button" type="submit" aria-label="Enviar"><Send size={17} /></button></form>}
+          {tab === "chat" && inRoom && <form className="composer" onSubmit={sendMessage}><label className="sr-only" htmlFor="meeting-chat-message">{t("Mensagem")}</label><input id="meeting-chat-message" value={message} onChange={(event) => setMessage(event.target.value)} placeholder={user ? t("Mensagem como {name}", { name: user.first_name || user.username }) : t("Escreva uma mensagem")} /><button className="icon-button" type="submit" aria-label={t("Enviar")}><Send size={17} /></button></form>}
           </>}
         </aside>
       </div>
       {exitConfirmationOpen && <div className="meeting-confirm-backdrop" role="presentation" onMouseDown={() => setExitConfirmationOpen(false)}>
         <section className="meeting-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="leave-meeting-title" onMouseDown={(event) => event.stopPropagation()}>
           <ChevronLeft size={24} aria-hidden="true" />
-          <p className="eyebrow">Sair da reunião</p>
-          <h2 id="leave-meeting-title">{onExit ? `${exitLabel}?` : "Quer voltar para a Home?"}</h2>
-          <p>{room.coordinated ? "Ao encerrar a conversa, o importador volta à espera e o exportador fica disponível na sala da empresa." : "Você sairá desta sala e poderá entrar novamente pelo link enquanto a reunião estiver aberta."}</p>
+          <p className="eyebrow">{t("Sair da reunião")}</p>
+          <h2 id="leave-meeting-title">{onExit ? t("{label}?", { label: t(exitLabel) }) : t("Quer voltar para a Home?")}</h2>
+          <p>{room.coordinated ? t("Ao encerrar a conversa, o importador volta à espera e o exportador fica disponível na sala da empresa.") : t("Você sairá desta sala e poderá entrar novamente pelo link enquanto a reunião estiver aberta.")}</p>
           {hasJoined && <TranscriptDownload {...transcript} />}
           {transcript.error && <p role="alert">{transcript.error}</p>}
-          <div className="meeting-confirm-actions"><button className="button button-secondary" type="button" onClick={() => setExitConfirmationOpen(false)}>Continuar na reunião</button><button className="button button-primary" type="button" onClick={confirmExit}>{onExit ? exitLabel : "Voltar para a Home"}</button></div>
+          <div className="meeting-confirm-actions"><button className="button button-secondary" type="button" onClick={() => setExitConfirmationOpen(false)}>{t("Continuar na reunião")}</button><button className="button button-primary" type="button" onClick={confirmExit}>{onExit ? t(exitLabel) : t("Voltar para a Home")}</button></div>
         </section>
       </div>}
     </main>

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CaptionLanguage, LiveCaption } from "@/lib/api-types";
 import { assertCaptionSuccess, captionError, captionLanguages, captionTimestamp, configureCaptionLanguage, defaultSpokenLanguage, isCaptionLanguage, shouldDisplayCaption, type ZoomCaptionMessage } from "@/lib/zoom-captions";
+import { useI18n } from "./i18n-provider";
 
 type ZoomClient = ReturnType<typeof import("@zoom/videosdk")["default"]["createClient"]>;
 type SpeakingLanguage = Parameters<ReturnType<ZoomClient["getLiveTranscriptionClient"]>["setSpeakingLanguage"]>[0];
@@ -14,6 +15,7 @@ type Props = {
 };
 
 export function useZoomCaptions({ client, sessionId, onCaption, saveTranscript }: Props) {
+  const { t, locale } = useI18n();
   const [spokenLanguage, setSpokenLanguage] = useState<CaptionLanguage>(() => {
     const saved = typeof window !== "undefined" ? localStorage.getItem("brevents-spoken-language") : null;
     return isCaptionLanguage(saved) ? saved : defaultSpokenLanguage();
@@ -121,7 +123,7 @@ export function useZoomCaptions({ client, sessionId, onCaption, saveTranscript }
         .then(() => saveTranscript(message.text, language, message.msgId))
         .catch((reason: unknown) => {
           console.error("Não foi possível salvar a transcrição do Zoom.", reason);
-          if (active) setHistoryError("A legenda está funcionando, mas não foi possível salvar uma fala no histórico.");
+          if (active) setHistoryError(t("A legenda está funcionando, mas não foi possível salvar uma fala no histórico."));
         });
     };
     const handleStatus = () => {
@@ -130,7 +132,7 @@ export function useZoomCaptions({ client, sessionId, onCaption, saveTranscript }
       setAvailableLanguages(keys.filter((key) => status.transcriptionLanguage.split(";").includes(captionLanguages[key].zoom)));
       const targets = new Set(status.translationLanguage.flatMap((pair) => pair.translatedToLanguage.split(";")));
       setTranslationLanguages(status.isLiveTranslationEnabled ? keys.filter((key) => targets.has(captionLanguages[key].translation)) : []);
-      if (status.isHostDisableCaptions) { setReady(false); setError("As legendas foram desativadas pelo organizador."); }
+      if (status.isHostDisableCaptions) { setReady(false); setError(t("As legendas foram desativadas pelo organizador.")); }
     };
     const handleEnabled = (enabled: boolean) => {
       if (!active) return;
@@ -142,7 +144,7 @@ export function useZoomCaptions({ client, sessionId, onCaption, saveTranscript }
       if (disabled) {
         setReady(false);
         setOverlay(null);
-        setError("As legendas foram desativadas pelo organizador.");
+        setError(t("As legendas foram desativadas pelo organizador."));
       } else setRetry((value) => value + 1);
     };
     client.on("caption-message", handleMessage);
@@ -170,7 +172,7 @@ export function useZoomCaptions({ client, sessionId, onCaption, saveTranscript }
         }
       } catch (reason) {
         console.error("Não foi possível iniciar a transcrição nativa do Zoom.", reason);
-        if (active) { setReady(false); setError(captionError(reason)); }
+        if (active) { setReady(false); setError(captionError(reason, locale)); }
       }
     });
     return () => {
@@ -188,7 +190,7 @@ export function useZoomCaptions({ client, sessionId, onCaption, saveTranscript }
       languageDirectory.clear();
       // Never call disableCaptions here: it disables the whole session, not just this viewer.
     };
-  }, [client, sessionId, retry]);
+  }, [client, locale, sessionId, retry, t]);
 
   useEffect(() => {
     if (!client || !ready) return;
@@ -213,11 +215,11 @@ export function useZoomCaptions({ client, sessionId, onCaption, saveTranscript }
         configurationTimedOut.current = timedOut;
         if (timedOut) console.warn("O Zoom ainda não confirmou o idioma solicitado para as legendas.", reason);
         else console.error("Não foi possível selecionar o idioma das legendas do Zoom.", reason);
-        setError(captionError(reason));
+        setError(captionError(reason, locale));
       }
     });
     return () => { active = false; };
-  }, [client, ready, spokenLanguage, captionLanguage, retry]);
+  }, [captionLanguage, client, locale, ready, retry, spokenLanguage, t]);
 
   function selectSpokenLanguage(language: CaptionLanguage) {
     localStorage.setItem("brevents-spoken-language", language);

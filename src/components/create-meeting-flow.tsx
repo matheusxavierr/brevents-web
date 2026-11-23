@@ -8,10 +8,13 @@ import { useEffect, useRef, useState } from "react";
 import { apiClient } from "@/lib/api-client";
 import type { EventData } from "@/lib/api-types";
 import { Brand } from "./brand";
+import { LanguageSwitcher } from "./language-switcher";
+import { useI18n } from "./i18n-provider";
 import { useSession } from "./session-provider";
 
 export function CreateMeetingFlow() {
   const router = useRouter();
+  const { t } = useI18n();
   const { user } = useSession();
   const started = useRef(false);
   const [error, setError] = useState("");
@@ -33,17 +36,18 @@ export function CreateMeetingFlow() {
         router.replace(`/meetings/${meeting.slug}`);
       } catch (reason) {
         console.error("Não foi possível criar a reunião.", reason);
-        setError(reason instanceof Error ? reason.message : "Não foi possível criar a reunião.");
+        setError(reason instanceof Error ? reason.message : t("Não foi possível criar a reunião."));
       }
     }
 
     void createMeeting();
-  }, [router, user]);
+  }, [router, t, user]);
 
   return <main className="meeting-bootstrap">
     <Brand href="/" />
-    {!error ? <><span className="navigation-spinner" /><h1>Abrindo sua sala…</h1><p>Você irá direto para a pré-sala.</p></> : <><h1>Não foi possível abrir a sala</h1><p role="alert">{error}</p><button className="button button-primary" type="button" onClick={() => window.location.reload()}><RotateCcw size={17} /> Tentar novamente</button></>}
-    <Link href="/servicos/meetings"><ArrowLeft size={16} /> Voltar</Link>
+    <LanguageSwitcher className="meeting-bootstrap-language" />
+    {!error ? <><span className="navigation-spinner" /><h1>{t("Abrindo sua sala…")}</h1><p>{t("Você irá direto para a pré-sala.")}</p></> : <><h1>{t("Não foi possível abrir a sala")}</h1><p role="alert">{error}</p><button className="button button-primary" type="button" onClick={() => window.location.reload()}><RotateCcw size={17} /> {t("Tentar novamente")}</button></>}
+    <Link href="/servicos/meetings"><ArrowLeft size={16} /> {t("Voltar")}</Link>
   </main>;
 }
 

@@ -3,6 +3,8 @@
 import { Camera, CameraOff, LoaderCircle, Mic, MicOff } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
+import { useI18n } from "./i18n-provider";
+
 export type VirtualBackgroundMode = "none" | "blur";
 
 export type MediaPreferences = {
@@ -34,6 +36,7 @@ type MediaDeviceSetupProps = {
 };
 
 export function MediaDeviceSetup({ value, onChange, active = true, stopPreviewRef, children }: MediaDeviceSetupProps) {
+  const { t } = useI18n();
   const preview = useRef<HTMLDivElement>(null);
   const audioStream = useRef<MediaStream | null>(null);
   const videoStream = useRef<MediaStream | null>(null);
@@ -133,7 +136,7 @@ export function MediaDeviceSetup({ value, onChange, active = true, stopPreviewRe
             const track = zoom.default.createLocalVideoTrack(value.videoDeviceId || undefined);
             const playerContainer = document.createElement("video-player-container");
             const player = document.createElement("video-player");
-            player.setAttribute("aria-label", "Prévia da câmera com fundo desfocado");
+            player.setAttribute("aria-label", t("Prévia da câmera com fundo desfocado"));
             playerContainer.appendChild(player);
             preview.current.replaceChildren(playerContainer);
             videoTrack.current = track;
@@ -155,12 +158,12 @@ export function MediaDeviceSetup({ value, onChange, active = true, stopPreviewRe
               fallbackPlayer.autoplay = true;
               fallbackPlayer.muted = true;
               fallbackPlayer.playsInline = true;
-              fallbackPlayer.setAttribute("aria-label", "Camera preview");
+              fallbackPlayer.setAttribute("aria-label", t("Prévia da câmera"));
               fallbackPlayer.srcObject = fallbackStream;
               preview.current.replaceChildren(fallbackPlayer);
               videoStream.current = fallbackStream;
               await fallbackPlayer.play();
-              setError("Background blur will be applied after you enter the meeting.");
+              setError(t("O desfoque de fundo será aplicado quando você entrar na reunião."));
             }
           } else {
             if (!navigator.mediaDevices?.getUserMedia) throw new Error("MEDIA_DEVICES_UNAVAILABLE");
@@ -180,7 +183,7 @@ export function MediaDeviceSetup({ value, onChange, active = true, stopPreviewRe
             player.autoplay = true;
             player.muted = true;
             player.playsInline = true;
-            player.setAttribute("aria-label", "Prévia da câmera");
+            player.setAttribute("aria-label", t("Prévia da câmera"));
             player.srcObject = nextVideoStream;
             preview.current.replaceChildren(player);
             videoStream.current = nextVideoStream;
@@ -199,7 +202,7 @@ export function MediaDeviceSetup({ value, onChange, active = true, stopPreviewRe
         await stopPreview();
         if (!cancelled) {
           setPreviewState("error");
-          setError("Não foi possível acessar a câmera ou o microfone. Verifique a permissão do navegador.");
+          setError(t("Não foi possível acessar a câmera ou o microfone. Verifique a permissão do navegador."));
         }
       }
     }
@@ -210,7 +213,7 @@ export function MediaDeviceSetup({ value, onChange, active = true, stopPreviewRe
       if (stopPreviewRef?.current === stopPreview) stopPreviewRef.current = null;
       void stopPreview();
     };
-  }, [active, stopPreviewRef, value.audioDeviceId, value.audioEnabled, value.noiseSuppression, value.videoDeviceId, value.videoEnabled, value.virtualBackgroundMode]);
+  }, [active, stopPreviewRef, t, value.audioDeviceId, value.audioEnabled, value.noiseSuppression, value.videoDeviceId, value.videoEnabled, value.virtualBackgroundMode]);
 
   function update(patch: Partial<MediaPreferences>) {
     onChange({ ...value, ...patch });
@@ -226,7 +229,7 @@ export function MediaDeviceSetup({ value, onChange, active = true, stopPreviewRe
         stream.getTracks().forEach((track) => track.stop());
       } catch (reason) {
         console.warn("Media permission was not granted.", reason);
-        setError("Permita o acesso à câmera e ao microfone no navegador para continuar.");
+        setError(t("Permita o acesso à câmera e ao microfone no navegador para continuar."));
         return;
       }
     }
@@ -237,43 +240,43 @@ export function MediaDeviceSetup({ value, onChange, active = true, stopPreviewRe
     <div className="media-device-setup">
       <div className={`media-preview${previewState === "ready" ? " camera-on" : ""}`} aria-busy={previewState === "loading"}>
         <div className="media-preview-player" ref={preview} />
-        {previewState === "off" && <div><CameraOff size={30} /><span>Câmera desligada</span></div>}
-        {previewState === "loading" && <div className="media-preview-status" role="status"><LoaderCircle className="spin" size={28} /><span>Abrindo câmera…</span></div>}
-        {previewState === "error" && <div className="media-preview-status error"><CameraOff size={30} /><span>Prévia indisponível</span></div>}
+        {previewState === "off" && <div><CameraOff size={30} /><span>{t("Câmera desligada")}</span></div>}
+        {previewState === "loading" && <div className="media-preview-status" role="status"><LoaderCircle className="spin" size={28} /><span>{t("Abrindo câmera…")}</span></div>}
+        {previewState === "error" && <div className="media-preview-status error"><CameraOff size={30} /><span>{t("Prévia indisponível")}</span></div>}
       </div>
       <div className="media-device-controls">
         <div className="media-toggle-row">
           <button type="button" className={value.audioEnabled ? "active" : ""} onClick={() => void toggleDevice("audio")}>
             {value.audioEnabled ? <Mic size={18} /> : <MicOff size={18} />}
-            {value.audioEnabled ? "Microfone ligado" : "Microfone desligado"}
+            {value.audioEnabled ? t("Microfone ligado") : t("Microfone desligado")}
           </button>
           <button type="button" className={value.videoEnabled ? "active" : ""} onClick={() => void toggleDevice("video")}>
             {value.videoEnabled ? <Camera size={18} /> : <CameraOff size={18} />}
-            {value.videoEnabled ? "Câmera ligada" : "Câmera desligada"}
+            {value.videoEnabled ? t("Câmera ligada") : t("Câmera desligada")}
           </button>
         </div>
         <div className="media-device-field">
-          <div className="media-label-row"><label htmlFor="prejoin-microphone">Microfone</label><span className="compact-toggle-label">Reduzir ruído <button type="button" className={`compact-toggle${value.noiseSuppression ? " active" : ""}`} role="switch" aria-checked={value.noiseSuppression} aria-label="Reduzir ruído do microfone" onClick={() => update({ noiseSuppression: !value.noiseSuppression })}><i /></button></span></div>
+          <div className="media-label-row"><label htmlFor="prejoin-microphone">{t("Microfone")}</label><span className="compact-toggle-label">{t("Reduzir ruído")} <button type="button" className={`compact-toggle${value.noiseSuppression ? " active" : ""}`} role="switch" aria-checked={value.noiseSuppression} aria-label={t("Reduzir ruído do microfone")} onClick={() => update({ noiseSuppression: !value.noiseSuppression })}><i /></button></span></div>
           <select id="prejoin-microphone" value={value.audioDeviceId} onChange={(event) => update({ audioDeviceId: event.target.value })}>
-            <option value="">Microfone padrão</option>
-            {audioDevices.map((device, index) => <option value={device.deviceId} key={device.deviceId}>{device.label || `Microfone ${index + 1}`}</option>)}
+            <option value="">{t("Microfone padrão")}</option>
+            {audioDevices.map((device, index) => <option value={device.deviceId} key={device.deviceId}>{device.label || t("Microfone {index}", { index: index + 1 })}</option>)}
           </select>
         </div>
         <label className="media-speaker-field">
-          <span>Saída de áudio</span>
+          <span>{t("Saída de áudio")}</span>
           <select value={speakerDevices.some((device) => device.deviceId === value.speakerDeviceId) ? value.speakerDeviceId : ""} onChange={(event) => update({ speakerDeviceId: event.target.value })}>
-            <option value="">Saída padrão do sistema</option>
-            {speakerDevices.map((device, index) => <option value={device.deviceId} key={device.deviceId}>{device.label || `Saída de áudio ${index + 1}`}</option>)}
+            <option value="">{t("Saída padrão do sistema")}</option>
+            {speakerDevices.map((device, index) => <option value={device.deviceId} key={device.deviceId}>{device.label || t("Saída de áudio {index}", { index: index + 1 })}</option>)}
           </select>
         </label>
         <label>
-          <span>Câmera</span>
+          <span>{t("Câmera")}</span>
           <select value={value.videoDeviceId} onChange={(event) => update({ videoDeviceId: event.target.value })}>
-            <option value="">Câmera padrão</option>
-            {videoDevices.map((device, index) => <option value={device.deviceId} key={device.deviceId}>{device.label || `Câmera ${index + 1}`}</option>)}
+            <option value="">{t("Câmera padrão")}</option>
+            {videoDevices.map((device, index) => <option value={device.deviceId} key={device.deviceId}>{device.label || t("Câmera {index}", { index: index + 1 })}</option>)}
           </select>
         </label>
-        <label><span>Fundo da câmera</span><select value={value.virtualBackgroundMode} onChange={(event) => update({ virtualBackgroundMode: event.target.value as VirtualBackgroundMode })}><option value="none">Sem efeito</option><option value="blur">Desfocar fundo</option></select></label>
+        <label><span>{t("Fundo da câmera")}</span><select value={value.virtualBackgroundMode} onChange={(event) => update({ virtualBackgroundMode: event.target.value as VirtualBackgroundMode })}><option value="none">{t("Sem efeito")}</option><option value="blur">{t("Desfocar fundo")}</option></select></label>
         {children}
         {error && <p className="media-device-error" role="alert">{error}</p>}
       </div>

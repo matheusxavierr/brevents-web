@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { apiClient } from "@/lib/api-client";
 import type { EventData, Room } from "@/lib/api-types";
 import { ConnectedMeetingExperience } from "./connected-meeting-experience";
+import { useI18n } from "./i18n-provider";
 import { useSession } from "./session-provider";
 import { useMatchmaking, roundClock } from "./use-matchmaking";
 import { Dialog } from "./event-dashboard/shared";
@@ -15,11 +16,12 @@ import styles from "./matchmaking.module.css";
 
 export function NetworkingSala({ event, roomId }: { event: EventData; roomId: string }) {
   const router = useRouter();
+  const { t } = useI18n();
   const { user } = useSession();
   const [fetchedRoom, setFetchedRoom] = useState<Room | null>(null);
   const [room, setRoom] = useState<Room | null>(null);
   const [error, setError] = useState("");
-  const { data, now, error: stateError, refresh } = useMatchmaking(event.id, Boolean(user));
+  const { data, now, error: stateError, refresh } = useMatchmaking(event.id, Boolean(user), false, t);
   const [ending, setEnding] = useState(false);
   const [busy, setBusy] = useState(false);
   const [joinedBefore, setJoinedBefore] = useState(false);
@@ -52,7 +54,7 @@ export function NetworkingSala({ event, roomId }: { event: EventData; roomId: st
       await apiClient("matchmaking/support/", { method: "POST", body: { event: event.id, round: activeRound.id } });
       await refresh();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Não foi possível solicitar suporte.");
+      setError(reason instanceof Error ? reason.message : t("Não foi possível solicitar suporte."));
     } finally {
       setRequestingSupport(false);
     }
@@ -64,7 +66,7 @@ export function NetworkingSala({ event, roomId }: { event: EventData; roomId: st
     try {
       await apiClient("matchmaking/end/", { method: "POST", body: { event: event.id, round: latestRound.current } });
       setEnding(false); await refresh();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Não foi possível encerrar a conversa."); }
+    } catch (reason) { setError(reason instanceof Error ? reason.message : t("Não foi possível encerrar a conversa.")); }
     finally { setBusy(false); }
   }
 
@@ -79,12 +81,12 @@ export function NetworkingSala({ event, roomId }: { event: EventData; roomId: st
         if (active && !data.coordinated) setFetchedRoom(data);
       })
       .catch((reason) => {
-        if (active) setError(reason instanceof Error ? reason.message : "Sala indisponível.");
+        if (active) setError(reason instanceof Error ? reason.message : t("Sala indisponível."));
       });
     return () => {
       active = false;
     };
-  }, [roomId, router, user]);
+  }, [roomId, router, t, user]);
 
   function leaveRoom() {
     if (coordinator) { router.replace(`/eventos/${event.slug}/networking`); return; }
@@ -93,25 +95,25 @@ export function NetworkingSala({ event, roomId }: { event: EventData; roomId: st
   }
 
   if ((error || stateError) && !room) {
-    return <main className="event-unavailable"><DoorOpen size={38} /><p className="eyebrow">Sala de matchmaking</p><h1>Não foi possível abrir esta sala.</h1><p>{error || stateError}</p><Link className="button button-primary" href={`/eventos/${event.slug}/networking`}>Voltar ao matchmaking</Link></main>;
+    return <main className="event-unavailable"><DoorOpen size={38} /><p className="eyebrow">{t("Sala de matchmaking")}</p><h1>{t("Não foi possível abrir esta sala.")}</h1><p>{error || stateError}</p><Link className="button button-primary" href={`/eventos/${event.slug}/networking`}>{t("Voltar ao matchmaking")}</Link></main>;
   }
   if (!room) {
-    return <main className="dashboard-loading"><LoaderCircle className="spin" /><p>Abrindo a sala…</p></main>;
+    return <main className="dashboard-loading"><LoaderCircle className="spin" /><p>{t("Abrindo a sala…")}</p></main>;
   }
   const allowed = !room.coordinated || (data?.role === "exporter" ? data.room?.id === roomId : Boolean(activeRound && !expired && activeRound.room === roomId));
   const clock = activeRound && !expired ? roundClock(activeRound.expires_at, now) : null;
   return <div className={room.coordinated ? styles.roomPage : undefined}>
-    {room.coordinated && <div className={styles.roomNotice} role="status"><Building2 size={22} /><div><strong>{data?.role === "exporter" ? `Esta é a sua sala · ${room.company_name}` : `Reunião com ${room.company_name}`}</strong><small>{activeRound && !expired ? `${activeRound.exporter.name} + ${activeRound.importer.name} · rodada de negócios` : wasAssigned ? "Conversa concluída. Sua empresa está disponível para a próxima conexão." : "Sua empresa está pronta. Aguarde a coordenação direcionar um importador."}</small></div>{joinedSession && joinedSession === room.zoom_session?.session_name && activeRound && !expired && !coordinator && <button disabled={requestingSupport || Boolean(activeRound.support_requested_at)} onClick={() => void requestSupport()}>{activeRound.support_requested_at ? "Suporte solicitado" : "Pedir suporte"}</button>}{clock && <time><Clock3 size={14} /> {clock}</time>}{activeRound && !expired && <button onClick={() => setEnding(true)}>Encerrar rodada</button>}</div>}
-    {allowed && !(expired && data?.role === "exporter") ? <ConnectedMeetingExperience key={room.zoom_session?.session_name} event={event} roomOverride={room} exitHref={`/eventos/${event.slug}/networking`} onExit={leaveRoom} onCallLeave={leaveRoom} exitLabel={coordinator ? "Voltar à coordenação" : activeRound ? "Encerrar conversa" : "Voltar ao lobby"} autoJoin={joinedBefore && !coordinator} onCallState={(joined) => {
+    {room.coordinated && <div className={styles.roomNotice} role="status"><Building2 size={22} /><div><strong>{data?.role === "exporter" ? t("Esta é a sua sala · {company}", { company: room.company_name ?? "" }) : t("Reunião com {company}", { company: room.company_name ?? "" })}</strong><small>{activeRound && !expired ? t("{exporter} + {importer} · rodada de negócios", { exporter: activeRound.exporter.name ?? "", importer: activeRound.importer.name ?? "" }) : wasAssigned ? t("Conversa concluída. Sua empresa está disponível para a próxima conexão.") : t("Sua empresa está pronta. Aguarde a coordenação direcionar um importador.")}</small></div>{joinedSession && joinedSession === room.zoom_session?.session_name && activeRound && !expired && !coordinator && <button disabled={requestingSupport || Boolean(activeRound.support_requested_at)} onClick={() => void requestSupport()}>{activeRound.support_requested_at ? t("Suporte solicitado") : t("Pedir suporte")}</button>}{clock && <time><Clock3 size={14} /> {clock}</time>}{activeRound && !expired && <button onClick={() => setEnding(true)}>{t("Encerrar rodada")}</button>}</div>}
+    {allowed && !(expired && data?.role === "exporter") ? <ConnectedMeetingExperience key={room.zoom_session?.session_name} event={event} roomOverride={room} exitHref={`/eventos/${event.slug}/networking`} onExit={leaveRoom} onCallLeave={leaveRoom} exitLabel={coordinator ? t("Voltar à coordenação") : activeRound ? t("Encerrar conversa") : t("Voltar ao lobby")} autoJoin={joinedBefore && !coordinator} onCallState={(joined) => {
       setJoinedSession(joined ? room.zoom_session?.session_name ?? null : null);
       if (!joined) return;
       setJoinedBefore(true);
       if (data?.role === "importer" && activeRound) {
         void apiClient("matchmaking/joined/", { method: "POST", body: { event: event.id, round: activeRound.id } })
-          .catch((reason) => setError(reason instanceof Error ? reason.message : "Não foi possível registrar a participação."));
+          .catch((reason) => setError(reason instanceof Error ? reason.message : t("Não foi possível registrar a participação.")));
       }
-    }} /> : <main className="dashboard-loading"><LoaderCircle className="spin" /><p>{expired ? "Conversa concluída. Voltando para a espera…" : "Validando seu direcionamento…"}</p></main>}
+    }} /> : <main className="dashboard-loading"><LoaderCircle className="spin" /><p>{expired ? t("Conversa concluída. Voltando para a espera…") : t("Validando seu direcionamento…")}</p></main>}
     {(error || stateError) && <p className={styles.error} role="alert">{error || stateError}</p>}
-    {ending && <Dialog title="Encerrar a rodada?" busy={busy} onClose={() => setEnding(false)}><p>O importador voltará à área de espera e a empresa ficará disponível para a próxima conversa.</p><div className={styles.actions}><button disabled={busy} onClick={() => setEnding(false)}>Continuar conversa</button><button className={styles.danger} disabled={busy} onClick={() => void finish()}>Encerrar conversa</button></div></Dialog>}
+    {ending && <Dialog title={t("Encerrar a rodada?")} busy={busy} onClose={() => setEnding(false)}><p>{t("O importador voltará à área de espera e a empresa ficará disponível para a próxima conversa.")}</p><div className={styles.actions}><button disabled={busy} onClick={() => setEnding(false)}>{t("Continuar conversa")}</button><button className={styles.danger} disabled={busy} onClick={() => void finish()}>{t("Encerrar conversa")}</button></div></Dialog>}
   </div>;
 }

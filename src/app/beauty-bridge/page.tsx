@@ -1,5 +1,8 @@
 import { redirect } from "next/navigation";
 
-export default function BeautyBridgePage() {
-  redirect("/beauty-bridge/pt.html");
+import { getLocale } from "@/lib/i18n/server";
+
+export default async function BeautyBridgePage() {
+  const locale = await getLocale();
+  redirect(`/beauty-bridge/${locale}.html`);
 }

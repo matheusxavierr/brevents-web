@@ -5,7 +5,7 @@ import { ApiError, apiClient } from "@/lib/api-client";
 import type { MatchmakingState } from "@/lib/api-types";
 import { websocketBaseUrl } from "@/lib/realtime";
 
-export function useMatchmaking(eventId: string, presence = false, supportUpdates = false) {
+export function useMatchmaking(eventId: string, presence = false, supportUpdates = false, translate: (key: string) => string = (key) => key) {
   const [data, setData] = useState<MatchmakingState | null>(null);
   const [error, setError] = useState("");
   const [now, setNow] = useState(0);
@@ -23,10 +23,10 @@ export function useMatchmaking(eventId: string, presence = false, supportUpdates
     } catch (reason) {
       if (version === generation.current) {
         if (reason instanceof ApiError && (reason.status === 401 || reason.status === 403)) setData(null);
-        setError(reason instanceof Error ? reason.message : "Não foi possível atualizar as rodadas.");
+        setError(reason instanceof Error ? reason.message : translate("Não foi possível atualizar as rodadas."));
       }
     }
-  }, [eventId]);
+  }, [eventId, translate]);
   useEffect(() => {
     if (!supportUpdates || data?.role !== "coordinator") return;
     let stopped = false;

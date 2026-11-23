@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, FileText, Send, ThumbsUp, UsersRound } from "lucide-react";
 import { Brand } from "./brand";
-import { formatChatTime } from "@/lib/format-date";
+import { LanguageSwitcher } from "./language-switcher";
+import { useI18n } from "./i18n-provider";
 import { normalizeRealtimeChatMessage } from "@/lib/chat";
 import { EventUnavailable } from "./event-unavailable";
 import { ZoomVideoRoom } from "./zoom-video-room";
@@ -18,8 +19,16 @@ import type { ChatChannel, ChatMessage, EventData, Paginated, Poll, Question, Us
 type Tab = "chat" | "questions" | "poll" | "transcript";
 type JoinResponse = { token: string };
 
+function formatCaptionTime(intlLocale: string, value: string) {
+  if (!value) return "--:--";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "--:--";
+  return new Intl.DateTimeFormat(intlLocale, { hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
 export function ConnectedLiveExperience({ event }: { event: EventData }) {
   const router = useRouter();
+  const { t, intlLocale } = useI18n();
   const { user: sessionUser } = useSession();
   const publicRoom = event.rooms?.find((item) => item.zoom_session) ?? event.rooms?.[0];
   const [room, setRoom] = useState(publicRoom);
@@ -32,7 +41,7 @@ export function ConnectedLiveExperience({ event }: { event: EventData }) {
   const [hasJoined, setHasJoined] = useState(false);
   const joinedOnce = useRef(false);
   const transcriptContent = useRef<HTMLDivElement>(null);
-  const transcript = useTranscript({ sessionId: room?.zoom_session?.id, eventId: event.id, guest, enabled: hasJoined, refreshKey: inRoom, title: event.name, roomName: room?.name ?? "Auditório", timeZone: event.timezone });
+  const transcript = useTranscript({ sessionId: room?.zoom_session?.id, eventId: event.id, guest, enabled: hasJoined, refreshKey: inRoom, title: event.name, roomName: room?.name ?? t("Auditório"), timeZone: event.timezone });
   const changeJoined = useCallback((joined: boolean) => {
     setInRoom(joined);
     if (joined) { joinedOnce.current = true; setHasJoined(true); }
@@ -89,7 +98,7 @@ export function ConnectedLiveExperience({ event }: { event: EventData }) {
         setAccessGranted(true);
         const roomData = await apiClient<Paginated<NonNullable<typeof publicRoom>>>(`rooms/?event=${event.id}`);
         const activeRoom = roomData.results.find((item) => item.id === activePublicRoom.id) ?? roomData.results[0];
-        if (!activeRoom) throw new Error("Nenhuma sala disponível para esta inscrição.");
+        if (!activeRoom) throw new Error(t("Nenhuma sala disponível para esta inscrição."));
         setRoom(activeRoom);
         const channels = await apiClient<Paginated<ChatChannel>>(`chat/channels/?event=${event.id}&room=${activeRoom.id}`);
         const activeChannel = channels.results[0] ?? null;
@@ -126,16 +135,16 @@ export function ConnectedLiveExperience({ event }: { event: EventData }) {
             setPolls((current) => [...current.filter((item) => item.id !== nextPoll.id), nextPoll]);
           }
         };
-        ws.onerror = () => setError("A conexão em tempo real foi interrompida. Recarregue a página para tentar novamente.");
+        ws.onerror = () => setError(t("A conexão em tempo real foi interrompida. Recarregue a página para tentar novamente."));
         ws.onclose = () => setConnected(false);
       } catch (reason) {
-        const message = reason instanceof Error ? reason.message : "Não foi possível entrar nesta sala.";
+        const message = reason instanceof Error ? reason.message : t("Não foi possível entrar nesta sala.");
         setError(message);
       }
     }
     load();
     return () => { cancelled = true; socket.current?.close(); };
-  }, [event.access_mode, event.id, publicRoom, router, sessionUser]);
+  }, [event.access_mode, event.id, publicRoom, router, sessionUser, t]);
 
   useEffect(() => {
     const content = transcriptContent.current;
@@ -159,7 +168,7 @@ export function ConnectedLiveExperience({ event }: { event: EventData }) {
     try {
       const created = await apiClient<Question>("questions/", { method: "POST", body: { room: room.id, content: question.trim() } });
       setQuestions((current) => [...current, created]); setQuestion("");
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Não foi possível enviar sua pergunta."); }
+    } catch (reason) { setError(reason instanceof Error ? reason.message : t("Não foi possível enviar sua pergunta.")); }
     finally { setAskingQuestion(false); }
   }
 
@@ -174,35 +183,35 @@ export function ConnectedLiveExperience({ event }: { event: EventData }) {
   }
 
   if (eventEnded) return <EventUnavailable ended actions={hasJoined ? <><TranscriptDownload {...transcript} />{transcript.error && <p role="alert">{transcript.error}</p>}</> : undefined} />;
-  if (!room) return <main className="empty-state"><h1>Nenhuma sala disponível</h1><Link className="button button-secondary" href={`/eventos/${event.slug}`}>Voltar ao evento</Link></main>;
+  if (!room) return <main className="empty-state"><h1>{t("Nenhuma sala disponível")}</h1><Link className="button button-secondary" href={`/eventos/${event.slug}`}>{t("Voltar ao evento")}</Link></main>;
 
   const tabs: Tab[] = guest ? ["chat"] : ["chat", "questions", "poll"];
   if (room.zoom_session) tabs.push("transcript");
 
   return <main className="live-page">
-    <header className="live-header"><div className="container live-header-inner"><Brand /><span className="live-header-title">{event.name} · {room.name}</span><Link className="button live-networking" href={`/eventos/${event.slug}/networking`}><UsersRound size={16} /> Matchmaking</Link><button className="button live-exit" type="button" onClick={() => setExitConfirmationOpen(true)}><ChevronLeft size={16} /><span className="live-exit-desktop">Voltar pra Home</span><span className="live-exit-mobile">Voltar</span></button></div></header>
+    <header className="live-header"><div className="container live-header-inner"><Brand /><span className="live-header-title">{event.name} · {room.name}</span><LanguageSwitcher className="live-language" /><Link className="button live-networking" href={`/eventos/${event.slug}/networking`}><UsersRound size={16} /> {t("Matchmaking")}</Link><button className="button live-exit" type="button" onClick={() => setExitConfirmationOpen(true)}><ChevronLeft size={16} /><span className="live-exit-desktop">{t("Voltar pra Home")}</span><span className="live-exit-mobile">{t("Voltar")}</span></button></div></header>
     <div className="live-layout">
-      <section className="video-column" aria-label="Transmissão ao vivo">
+      <section className="video-column" aria-label={t("Transmissão ao vivo")}>
         <div className="video-player">
-          {accessGranted && room.zoom_session ? <ZoomVideoRoom session={room.zoom_session} eventId={event.id} guest={guest} onCaption={transcript.addCaption} onJoinedChange={changeJoined} /> : !accessGranted ? <div className="video-center"><h1>Inscrição necessária</h1><p>Confirme seu nome e e-mail antes de entrar na transmissão.</p><Link className="button button-primary" href={`/eventos/${event.slug}/inscricao`}>Fazer inscrição</Link></div> : youtubeId ? <iframe className="video-embed" src={`https://www.youtube-nocookie.com/embed/${youtubeId}?autoplay=0`} title={session?.title ?? event.name} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen /> : <div className="video-center"><span className="live-pill"><span className="live-dot" /> Transmissão</span><h1>{session?.title ?? event.name}</h1><p>{session?.speakers_detail.map((speaker) => speaker.name).join(" e ")}</p></div>}
+          {accessGranted && room.zoom_session ? <ZoomVideoRoom session={room.zoom_session} eventId={event.id} guest={guest} onCaption={transcript.addCaption} onJoinedChange={changeJoined} /> : !accessGranted ? <div className="video-center"><h1>{t("Inscrição necessária")}</h1><p>{t("Confirme seu nome e e-mail antes de entrar na transmissão.")}</p><Link className="button button-primary" href={`/eventos/${event.slug}/inscricao`}>{t("Fazer inscrição")}</Link></div> : youtubeId ? <iframe className="video-embed" src={`https://www.youtube-nocookie.com/embed/${youtubeId}?autoplay=0`} title={session?.title ?? event.name} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen /> : <div className="video-center"><span className="live-pill"><span className="live-dot" /> {t("Transmissão")}</span><h1>{session?.title ?? event.name}</h1><p>{session?.speakers_detail.map((speaker) => speaker.name).join(t(" e "))}</p></div>}
         </div>
-        <div className="session-bar"><div><h2>{session?.title ?? event.name}</h2><p>{room.name} · {guest ? "modo espectador" : connected ? "conectado em tempo real" : "conectando..."}</p></div></div>
-        {error && <p className="live-error" role="alert">{error} <Link href={`/eventos/${event.slug}/inscricao`}>Ver inscrição</Link></p>}
+        <div className="session-bar"><div><h2>{session?.title ?? event.name}</h2><p>{room.name} · {guest ? t("modo espectador") : connected ? t("conectado em tempo real") : t("conectando...")}</p></div></div>
+        {error && <p className="live-error" role="alert">{error} <Link href={`/eventos/${event.slug}/inscricao`}>{t("Ver inscrição")}</Link></p>}
       </section>
       <aside className="interaction-panel">
         <div className={`interaction-tabs${room.zoom_session ? " event-interaction-tabs" : ""}`} role="tablist">
-          {tabs.map((item) => <button key={item} className={`interaction-tab${tab === item ? " active" : ""}`} role="tab" aria-selected={tab === item} onClick={() => setTab(item)}>{item === "transcript" && <FileText size={15} />}{item === "chat" ? "Chat" : item === "questions" ? "Perguntas" : item === "poll" ? "Enquete" : "Transcrição"}</button>)}
+          {tabs.map((item) => <button key={item} className={`interaction-tab${tab === item ? " active" : ""}`} role="tab" aria-selected={tab === item} onClick={() => setTab(item)}>{item === "transcript" && <FileText size={15} />}{item === "chat" ? t("Chat") : item === "questions" ? t("Perguntas") : item === "poll" ? t("Enquete") : t("Transcrição")}</button>)}
         </div>
         <div className="interaction-content" ref={transcriptContent}>
-          {tab === "transcript" && (hasJoined ? <TranscriptPanel {...transcript} ended={!inRoom} /> : <div className="meeting-panel-empty"><FileText size={24} /><strong>Transcrição do evento</strong><span>Entre na sala para acompanhar as falas.</span></div>)}
-          {guest && tab === "chat" && <div className="guest-interaction"><p className="eyebrow">Modo espectador</p><h2>Quer participar da conversa?</h2><p>Crie uma conta gratuita para usar chat, perguntas e receber convites para subir ao palco.</p><Link className="button button-primary" href={`/criar-conta?next=/eventos/${event.slug}/ao-vivo`}>Criar conta</Link><Link className="button button-secondary" href={`/entrar?next=/eventos/${event.slug}/ao-vivo`}>Já tenho conta</Link></div>}
-          {!guest && tab === "chat" && messages.map((item) => <article className="message" key={item.id}><span className="avatar">{(item.sender?.first_name || item.sender?.name || item.sender?.username || "?").slice(0, 2).toUpperCase()}</span><div><strong>{item.sender ? item.sender.name || `${item.sender.first_name ?? ""} ${item.sender.last_name ?? ""}`.trim() || item.sender.username : "Participante"}</strong><time>{formatChatTime(item.created_at)}</time><p>{item.body}</p></div></article>)}
-          {!guest && tab === "questions" && <><form className="panel-form" onSubmit={askQuestion}><label className="sr-only" htmlFor="question">Pergunta</label><textarea id="question" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Pergunte ao palestrante" /><small>Uma pergunta a cada cinco minutos por participante.</small><button className="button button-primary" type="submit" disabled={askingQuestion}>{askingQuestion ? "Enviando…" : "Enviar pergunta"}</button></form>{questions.map((item) => <article className="question-card" key={item.id}><p>{item.content}</p><button className="vote-button" type="button" aria-pressed={item.voted} onClick={() => voteQuestion(item)}><ThumbsUp size={14} /> {item.score} votos</button></article>)}</>}
-          {!guest && tab === "poll" && polls.map((poll) => <article className="poll-card" key={poll.id}><p><strong>{poll.question}</strong></p>{poll.options.map((option) => <button className="poll-option" type="button" key={option.id} onClick={() => votePoll(poll, option.id)}><span>{option.text}</span><span>{option.votes === null ? "Votar" : option.votes}</span></button>)}</article>)}
+          {tab === "transcript" && (hasJoined ? <TranscriptPanel {...transcript} ended={!inRoom} /> : <div className="meeting-panel-empty"><FileText size={24} /><strong>{t("Transcrição do evento")}</strong><span>{t("Entre na sala para acompanhar as falas.")}</span></div>)}
+          {guest && tab === "chat" && <div className="guest-interaction"><p className="eyebrow">{t("Modo espectador")}</p><h2>{t("Quer participar da conversa?")}</h2><p>{t("Crie uma conta gratuita para usar chat, perguntas e receber convites para subir ao palco.")}</p><Link className="button button-primary" href={`/criar-conta?next=/eventos/${event.slug}/ao-vivo`}>{t("Criar conta")}</Link><Link className="button button-secondary" href={`/entrar?next=/eventos/${event.slug}/ao-vivo`}>{t("Já tenho conta")}</Link></div>}
+          {!guest && tab === "chat" && messages.map((item) => <article className="message" key={item.id}><span className="avatar">{(item.sender?.first_name || item.sender?.name || item.sender?.username || "?").slice(0, 2).toUpperCase()}</span><div><strong>{item.sender ? item.sender.name || `${item.sender.first_name ?? ""} ${item.sender.last_name ?? ""}`.trim() || item.sender.username : t("Participante")}</strong><time>{formatCaptionTime(intlLocale, item.created_at)}</time><p>{item.body}</p></div></article>)}
+          {!guest && tab === "questions" && <><form className="panel-form" onSubmit={askQuestion}><label className="sr-only" htmlFor="question">{t("Pergunta")}</label><textarea id="question" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder={t("Pergunte ao palestrante")} /><small>{t("Uma pergunta a cada cinco minutos por participante.")}</small><button className="button button-primary" type="submit" disabled={askingQuestion}>{askingQuestion ? t("Enviando…") : t("Enviar pergunta")}</button></form>{questions.map((item) => <article className="question-card" key={item.id}><p>{item.content}</p><button className="vote-button" type="button" aria-pressed={item.voted} onClick={() => voteQuestion(item)}><ThumbsUp size={14} /> {t("{count} votos", { count: item.score })}</button></article>)}</>}
+          {!guest && tab === "poll" && polls.map((poll) => <article className="poll-card" key={poll.id}><p><strong>{poll.question}</strong></p>{poll.options.map((option) => <button className="poll-option" type="button" key={option.id} onClick={() => votePoll(poll, option.id)}><span>{option.text}</span><span>{option.votes === null ? t("Votar") : option.votes}</span></button>)}</article>)}
         </div>
-        {!guest && tab === "chat" && <form className="composer" onSubmit={sendMessage}><label className="sr-only" htmlFor="chat-message">Mensagem</label><input id="chat-message" value={message} onChange={(event) => setMessage(event.target.value)} placeholder={user ? `Mensagem como ${user.first_name}` : "Escreva uma mensagem"} /><button className="icon-button" type="submit" aria-label="Enviar"><Send size={17} /></button></form>}
+        {!guest && tab === "chat" && <form className="composer" onSubmit={sendMessage}><label className="sr-only" htmlFor="chat-message">{t("Mensagem")}</label><input id="chat-message" value={message} onChange={(event) => setMessage(event.target.value)} placeholder={user ? t("Mensagem como {name}", { name: user.first_name }) : t("Escreva uma mensagem")} /><button className="icon-button" type="submit" aria-label={t("Enviar")}><Send size={17} /></button></form>}
       </aside>
     </div>
-    {exitConfirmationOpen && <div className="meeting-confirm-backdrop" role="presentation" onMouseDown={() => setExitConfirmationOpen(false)}><section className="meeting-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="leave-event-title" onMouseDown={(event) => event.stopPropagation()}><ChevronLeft size={24} aria-hidden="true" /><p className="eyebrow">Sair do evento</p><h2 id="leave-event-title">Quer voltar para a Home?</h2><p>Você sairá da transmissão e poderá entrar novamente enquanto o evento estiver disponível.</p>{hasJoined && <TranscriptDownload {...transcript} />}{transcript.error && <p role="alert">{transcript.error}</p>}<div className="meeting-confirm-actions"><button className="button button-secondary" type="button" onClick={() => setExitConfirmationOpen(false)}>Continuar no evento</button><button className="button button-primary" type="button" onClick={() => router.push("/")}>Voltar para a Home</button></div></section></div>}
+    {exitConfirmationOpen && <div className="meeting-confirm-backdrop" role="presentation" onMouseDown={() => setExitConfirmationOpen(false)}><section className="meeting-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="leave-event-title" onMouseDown={(event) => event.stopPropagation()}><ChevronLeft size={24} aria-hidden="true" /><p className="eyebrow">{t("Sair do evento")}</p><h2 id="leave-event-title">{t("Quer voltar para a Home?")}</h2><p>{t("Você sairá da transmissão e poderá entrar novamente enquanto o evento estiver disponível.")}</p>{hasJoined && <TranscriptDownload {...transcript} />}{transcript.error && <p role="alert">{transcript.error}</p>}<div className="meeting-confirm-actions"><button className="button button-secondary" type="button" onClick={() => setExitConfirmationOpen(false)}>{t("Continuar no evento")}</button><button className="button button-primary" type="button" onClick={() => router.push("/")}>{t("Voltar para a Home")}</button></div></section></div>}
   </main>;
 }

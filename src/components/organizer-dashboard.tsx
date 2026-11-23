@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BarChart3, Building2, CalendarDays, Check, ChevronDown, ExternalLink, Film, LayoutDashboard, LogOut, MessageSquare, Plus, Radio, RefreshCw, Settings, Users } from "lucide-react";
 import { Brand } from "./brand";
+import { LanguageSwitcher } from "./language-switcher";
+import { useI18n } from "./i18n-provider";
 import { useSession } from "./session-provider";
 import { apiClient } from "@/lib/api-client";
 import type { Analytics, EventData, Registration, Room, Session, Speaker } from "@/lib/api-types";
@@ -39,6 +41,7 @@ const descriptions: Record<Tab, string> = {
 };
 
 export function OrganizerDashboard({ initialEventId, initialTab = "overview" }: { initialEventId?: string; initialTab?: Tab }) {
+  const { t } = useI18n();
   const router = useRouter();
   const { user } = useSession();
   const [events, setEvents] = useState<EventData[]>([]);
@@ -65,9 +68,9 @@ export function OrganizerDashboard({ initialEventId, initialTab = "overview" }: 
       setEvents(webEvents);
       setActiveId(webEvents.some((item) => item.id === initialEventId) ? initialEventId! : webEvents[0]?.id ?? "");
       if (!webEvents.length) setLoading(false);
-    }).catch((reason: unknown) => { if (!cancelled) { setError(reason instanceof Error ? reason.message : "Não foi possível carregar os eventos."); setLoading(false); } });
+    }).catch((reason: unknown) => { if (!cancelled) { setError(reason instanceof Error ? reason.message : t("Não foi possível carregar os eventos.")); setLoading(false); } });
     return () => { cancelled = true; };
-  }, [initialEventId, router, user]);
+  }, [initialEventId, router, t, user]);
 
   const load = useCallback(async (eventId: string) => {
     const current = ++generation.current;
@@ -83,9 +86,9 @@ export function OrganizerDashboard({ initialEventId, initialTab = "overview" }: 
   useEffect(() => {
     if (!activeId) return;
     let cancelled = false;
-    load(activeId).catch((reason: unknown) => { if (!cancelled) setError(reason instanceof Error ? reason.message : "Não foi possível carregar o evento."); }).finally(() => { if (!cancelled) setLoading(false); });
+    load(activeId).catch((reason: unknown) => { if (!cancelled) setError(reason instanceof Error ? reason.message : t("Não foi possível carregar o evento.")); }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; generation.current += 1; };
-  }, [activeId, load]);
+  }, [activeId, load, t]);
 
   useEffect(() => {
     if (!activeId || (tab !== "overview" && tab !== "analytics")) return;
@@ -106,27 +109,28 @@ export function OrganizerDashboard({ initialEventId, initialTab = "overview" }: 
       if (items.some((item) => item.id === activeId)) await load(activeId);
       else setActiveId(items.find((item) => item.public_config.product_type !== "meeting")?.id ?? "");
       setNotice(message); return true;
-    } catch (reason) { if (onError) onError(reason); else setError(reason instanceof Error ? reason.message : "Não foi possível salvar."); return false; }
+    } catch (reason) { if (onError) onError(reason); else setError(reason instanceof Error ? reason.message : t("Não foi possível salvar.")); return false; }
     finally { setBusy(false); }
   };
   async function logout() { await fetch("/api/auth/logout", { method: "POST" }); router.push("/entrar"); router.refresh(); }
 
   return <main className={styles.workspace}>
-    <aside className={styles.sidebar}><Brand href="/" /><small className={styles.navCaption}>GESTÃO DO EVENTO</small>
-      <nav aria-label="Painel do evento">
-        {navigation.filter((item) => item.id !== "settings").map(({ id, label, icon: Icon }) => <button key={id} type="button" aria-current={tab === id ? "page" : undefined} className={tab === id ? styles.navActive : ""} onClick={() => setTab(id)}><Icon size={18} /><span>{label}</span></button>)}
-        <span className={styles.comingSoon} tabIndex={0} aria-label="Gravações: em breve"><button type="button" disabled><Film size={18} /><span>Gravações</span></button><span className={styles.tooltip} role="tooltip">Em breve: gravações do evento</span></span>
+    <aside className={styles.sidebar}><Brand href="/" /><small className={styles.navCaption}>{t("GESTÃO DO EVENTO")}</small>
+      <nav aria-label={t("Painel do evento")}>
+        {navigation.filter((item) => item.id !== "settings").map(({ id, label, icon: Icon }) => <button key={id} type="button" aria-current={tab === id ? "page" : undefined} className={tab === id ? styles.navActive : ""} onClick={() => setTab(id)}><Icon size={18} /><span>{t(label)}</span></button>)}
+        <span className={styles.comingSoon} tabIndex={0} aria-label={t("Gravações: em breve")}><button type="button" disabled><Film size={18} /><span>{t("Gravações")}</span></button><span className={styles.tooltip} role="tooltip">{t("Em breve: gravações do evento")}</span></span>
       </nav>
-      <footer><button type="button" className={tab === "settings" ? styles.navActive : ""} onClick={() => setTab("settings")}><Settings size={18} /> Configurações</button><div className={styles.account}><span>{user?.first_name?.[0] || "O"}</span><div><strong>{user?.name || user?.username}</strong><small>{activeEvent?.owner?.id === user?.id ? "Organizador" : "Coordenador"}</small></div><button type="button" aria-label="Sair da conta" onClick={logout}><LogOut size={18} /></button></div></footer>
+      <footer><button type="button" className={tab === "settings" ? styles.navActive : ""} onClick={() => setTab("settings")}><Settings size={18} /> {t("Configurações")}</button><div className={styles.account}><span>{user?.first_name?.[0] || "O"}</span><div><strong>{user?.name || user?.username}</strong><small>{activeEvent?.owner?.id === user?.id ? t("Organizador") : t("Coordenador")}</small></div><button type="button" aria-label={t("Sair da conta")} onClick={logout}><LogOut size={18} /></button></div></footer>
     </aside>
     <section className={styles.main}>
-      <header className={styles.topbar}><div><span className={styles.kicker}>GESTÃO DO EVENTO</span><h1>{navigation.find((item) => item.id === tab)?.label}</h1><p>{descriptions[tab]}</p></div><div className={styles.headerActions}>
-        {events.length > 0 && <label className={styles.eventSelector}><CalendarDays size={20} /><span><small>Evento selecionado</small><select aria-label="Evento selecionado" value={activeId} disabled={busy} onChange={(event) => { setLoading(true); setError(""); setNotice(""); setRooms([]); setAnalytics(null); setActiveId(event.target.value); }}>{events.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></span><ChevronDown size={16} /></label>}
-        {(user?.account_type === "organizer" || user?.is_staff || user?.is_superuser) && <Link className={styles.primary} href="/painel/eventos/novo"><Plus size={17} /> Novo evento</Link>}
+      <header className={styles.topbar}><div><span className={styles.kicker}>{t("GESTÃO DO EVENTO")}</span><h1>{t(navigation.find((item) => item.id === tab)?.label ?? "")}</h1><p>{t(descriptions[tab])}</p></div><div className={styles.headerActions}>
+        <LanguageSwitcher className="dashboard-language" />
+        {events.length > 0 && <label className={styles.eventSelector}><CalendarDays size={20} /><span><small>{t("Evento selecionado")}</small><select aria-label={t("Evento selecionado")} value={activeId} disabled={busy} onChange={(event) => { setLoading(true); setError(""); setNotice(""); setRooms([]); setAnalytics(null); setActiveId(event.target.value); }}>{events.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></span><ChevronDown size={16} /></label>}
+        {(user?.account_type === "organizer" || user?.is_staff || user?.is_superuser) && <Link className={styles.primary} href="/painel/eventos/novo"><Plus size={17} /> {t("Novo evento")}</Link>}
       </div></header>
-      {(error || notice) && <div className={error ? styles.error : styles.success} role={error ? "alert" : "status"}>{error || notice}<button type="button" onClick={() => { setError(""); setNotice(""); }} aria-label="Fechar mensagem">×</button></div>}
+      {(error || notice) && <div className={error ? styles.error : styles.success} role={error ? "alert" : "status"}>{error || notice}<button type="button" onClick={() => { setError(""); setNotice(""); }} aria-label={t("Fechar mensagem")}>×</button></div>}
       <div className={styles.content} aria-busy={loading || busy}>
-        {loading ? <Empty>Carregando informações do evento…</Empty> : !activeEvent ? <Empty><h2>Nenhum evento disponível</h2><p>Os eventos que você organiza ou coordena aparecem aqui.</p>{(user?.account_type === "organizer" || user?.is_staff) && <Link className={styles.primary} href="/painel/eventos/novo">Criar evento</Link>}</Empty> : <div key={activeId}>
+        {loading ? <Empty>{t("Carregando informações do evento…")}</Empty> : !activeEvent ? <Empty><h2>{t("Nenhum evento disponível")}</h2><p>{t("Os eventos que você organiza ou coordena aparecem aqui.")}</p>{(user?.account_type === "organizer" || user?.is_staff) && <Link className={styles.primary} href="/painel/eventos/novo">{t("Criar evento")}</Link>}</Empty> : <div key={activeId}>
           {tab === "overview" && <Overview event={activeEvent} analytics={analytics} rooms={rooms} onNavigate={setTab} />}
           {tab === "agenda" && <AgendaPanel event={activeEvent} rooms={rooms} sessions={sessions} speakers={speakers} action={action} busy={busy} />}
           {tab === "stream" && <TransmissionPanel event={activeEvent} rooms={rooms} analytics={analytics} action={action} busy={busy} />}
@@ -138,26 +142,27 @@ export function OrganizerDashboard({ initialEventId, initialTab = "overview" }: 
           {tab === "settings" && <SettingsPanel event={activeEvent} action={action} busy={busy} />}
         </div>}
       </div>
-      <footer className={styles.statusbar}><span><i />{activeEvent?.name || "BR Events"}</span><button type="button" disabled={busy || loading || !activeId} onClick={() => void action(async () => undefined, "Dados atualizados.")}><RefreshCw size={13} /> Atualizar dados</button></footer>
+      <footer className={styles.statusbar}><span><i />{activeEvent?.name || "BR Events"}</span><button type="button" disabled={busy || loading || !activeId} onClick={() => void action(async () => undefined, t("Dados atualizados."))}><RefreshCw size={13} /> {t("Atualizar dados")}</button></footer>
     </section>
   </main>;
 }
 
 function Overview({ event, analytics, rooms, onNavigate }: { event: EventData; analytics: Analytics | null; rooms: Room[]; onNavigate: (tab: Tab) => void }) {
+  const { t, locale } = useI18n();
   const room = mainRoom(rooms, event.id);
   const steps: Array<{ label: string; detail: string; done: boolean; tab: Tab }> = [
-    { label: "Evento criado", detail: "Nome, descrição e horários definidos", done: true, tab: "settings" },
-    { label: "Inscrições abertas", detail: "O público pode confirmar sua participação", done: event.registration_open, tab: "settings" },
-    { label: "Auditório Zoom configurado", detail: "Sala principal pronta para receber o evento", done: !!room?.zoom_session?.configured, tab: "stream" },
-    { label: "Evento publicado", detail: "Página disponível para os participantes", done: event.status === "published", tab: "settings" },
+    { label: t("Evento criado"), detail: t("Nome, descrição e horários definidos"), done: true, tab: "settings" },
+    { label: t("Inscrições abertas"), detail: t("O público pode confirmar sua participação"), done: event.registration_open, tab: "settings" },
+    { label: t("Auditório Zoom configurado"), detail: t("Sala principal pronta para receber o evento"), done: !!room?.zoom_session?.configured, tab: "stream" },
+    { label: t("Evento publicado"), detail: t("Página disponível para os participantes"), done: event.status === "published", tab: "settings" },
   ];
   const ready = steps.filter((item) => item.done).length;
   const ended = event.status === "ended" || event.status === "archived";
   return <div className={styles.stack}>
-    <div className={styles.eventBanner}><div><span className={styles.badge}>{ended ? "Encerrado" : event.status === "published" ? "Publicado" : "Rascunho"}</span><h2>{event.name}</h2><p><CalendarDays size={16} />{dateTime(event.starts_at, event.timezone)} — {dateTime(event.ends_at, event.timezone)}</p></div><button className={styles.secondary} onClick={() => onNavigate("settings")}><Settings size={16} /> Editar evento</button></div>
-    <div className={styles.metrics}><Metric label="Inscrições realizadas" value={analytics?.registrations ?? 0} detail={`${analytics?.confirmed_registrations ?? 0} confirmadas`} /><Metric label="Interações no chat" value={analytics?.chat_messages ?? 0} detail="Mensagens enviadas no evento" /><Metric label={analytics?.is_live ? "Transmissão ativa há" : "Tempo da última transmissão"} value={duration(analytics?.live_duration_seconds)} detail="Tempo do auditório principal" /><Metric label="Rodadas de negócios realizadas" value={analytics?.networking?.realized ?? 0} detail="Conversas 1:1 com presença dos dois participantes" /></div>
-    <div className={styles.twoColumns}><section className={styles.card}><div className={styles.cardHeading}><div><h2>Preparação do evento</h2><p>Quatro passos para receber seu público.</p></div><span className={styles.badge}>{ready}/4</span></div><div className={styles.progress} role="progressbar" aria-label="Preparação do evento" aria-valuenow={ready} aria-valuemin={0} aria-valuemax={4}><span style={{ width: `${ready * 25}%` }} /></div><div className={styles.checklist}>{steps.map((step) => <button type="button" key={step.label} onClick={() => onNavigate(step.tab)}><span className={step.done ? styles.checkDone : styles.checkPending}>{step.done && <Check size={15} />}</span><div><strong>{step.label}</strong><small>{step.detail}</small></div></button>)}</div></section>
-      <section className={styles.card}><div className={styles.cardHeading}><div><h2>Acessos rápidos</h2><p>Prévia, operação e conteúdo do evento.</p></div></div><div className={styles.quickLinks}>{!ended && <><Link href={`/eventos/${event.slug}`} target="_blank">Página do evento <ExternalLink size={17} /></Link><Link href={`/eventos/${event.slug}/ao-vivo`} target="_blank">Entrar no auditório principal <ExternalLink size={17} /></Link><Link href={`/eventos/${event.slug}/lobby`} target="_blank">Lobby e rodadas de negócios <ExternalLink size={17} /></Link></>}{ended && <p>O evento foi encerrado. Você pode reabri-lo nas configurações.</p>}<button onClick={() => onNavigate("agenda")}>Organizar programação e palestrantes <CalendarDays size={17} /></button></div><p className={styles.hint}>A programação é opcional. Gravações estarão disponíveis em breve.</p></section>
+    <div className={styles.eventBanner}><div><span className={styles.badge}>{ended ? t("Encerrado") : event.status === "published" ? t("Publicado") : t("Rascunho")}</span><h2>{event.name}</h2><p><CalendarDays size={16} />{dateTime(event.starts_at, event.timezone, locale)} — {dateTime(event.ends_at, event.timezone, locale)}</p></div><button className={styles.secondary} onClick={() => onNavigate("settings")}><Settings size={16} /> {t("Editar evento")}</button></div>
+    <div className={styles.metrics}><Metric label={t("Inscrições realizadas")} value={analytics?.registrations ?? 0} detail={t("{count} confirmadas", { count: analytics?.confirmed_registrations ?? 0 })} /><Metric label={t("Interações no chat")} value={analytics?.chat_messages ?? 0} detail={t("Mensagens enviadas no evento")} /><Metric label={analytics?.is_live ? t("Transmissão ativa há") : t("Tempo da última transmissão")} value={duration(analytics?.live_duration_seconds)} detail={t("Tempo do auditório principal")} /><Metric label={t("Rodadas de negócios realizadas")} value={analytics?.networking?.realized ?? 0} detail={t("Conversas 1:1 com presença dos dois participantes")} /></div>
+    <div className={styles.twoColumns}><section className={styles.card}><div className={styles.cardHeading}><div><h2>{t("Preparação do evento")}</h2><p>{t("Quatro passos para receber seu público.")}</p></div><span className={styles.badge}>{ready}/4</span></div><div className={styles.progress} role="progressbar" aria-label={t("Preparação do evento")} aria-valuenow={ready} aria-valuemin={0} aria-valuemax={4}><span style={{ width: `${ready * 25}%` }} /></div><div className={styles.checklist}>{steps.map((step) => <button type="button" key={step.label} onClick={() => onNavigate(step.tab)}><span className={step.done ? styles.checkDone : styles.checkPending}>{step.done && <Check size={15} />}</span><div><strong>{step.label}</strong><small>{step.detail}</small></div></button>)}</div></section>
+      <section className={styles.card}><div className={styles.cardHeading}><div><h2>{t("Acessos rápidos")}</h2><p>{t("Prévia, operação e conteúdo do evento.")}</p></div></div><div className={styles.quickLinks}>{!ended && <><Link href={`/eventos/${event.slug}`} target="_blank">{t("Página do evento")} <ExternalLink size={17} /></Link><Link href={`/eventos/${event.slug}/ao-vivo`} target="_blank">{t("Entrar no auditório principal")} <ExternalLink size={17} /></Link><Link href={`/eventos/${event.slug}/lobby`} target="_blank">{t("Lobby e rodadas de negócios")} <ExternalLink size={17} /></Link></>}{ended && <p>{t("O evento foi encerrado. Você pode reabri-lo nas configurações.")}</p>}<button onClick={() => onNavigate("agenda")}>{t("Organizar programação e palestrantes")} <CalendarDays size={17} /></button></div><p className={styles.hint}>{t("A programação é opcional. Gravações estarão disponíveis em breve.")}</p></section>
     </div>
   </div>;
 }

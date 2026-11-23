@@ -4,8 +4,10 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, CircleAlert, LoaderCircle } from "lucide-react";
 import { readError } from "@/lib/api-client";
+import { useI18n } from "./i18n-provider";
 
 export function AuthForm({ mode, nextPath = "/" }: { mode: "login" | "register"; nextPath?: string }) {
+  const { t } = useI18n();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -22,13 +24,13 @@ export function AuthForm({ mode, nextPath = "/" }: { mode: "login" | "register";
       });
       const data = await response.json().catch(() => null);
       if (!response.ok) {
-        setError(response.status === 401 ? "E-mail ou senha inválidos." : readError(data));
+        setError(response.status === 401 ? t("E-mail ou senha inválidos.") : readError(data));
         return;
       }
       const destination = nextPath.startsWith("/") ? nextPath : "/";
       window.location.replace(destination);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Não foi possível concluir o acesso.");
+      setError(reason instanceof Error ? reason.message : t("Não foi possível concluir o acesso."));
     } finally {
       setLoading(false);
     }
@@ -37,10 +39,10 @@ export function AuthForm({ mode, nextPath = "/" }: { mode: "login" | "register";
   return (
     <form className="auth-form" onSubmit={submit}>
       {mode === "register" && (
-        <label className="field"><span>Nome completo</span><input name="name" autoComplete="name" required /></label>
+        <label className="field"><span>{t("Nome completo")}</span><input name="name" autoComplete="name" required /></label>
       )}
       <label className="field">
-        <span>E-mail</span>
+        <span>{t("E-mail")}</span>
         <input
           name="email"
           type="email"
@@ -48,15 +50,15 @@ export function AuthForm({ mode, nextPath = "/" }: { mode: "login" | "register";
           required
         />
       </label>
-      <label className="field"><span>Senha</span><input name="password" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} minLength={8} required /></label>
+      <label className="field"><span>{t("Senha")}</span><input name="password" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} minLength={8} required /></label>
       {error && <p className="form-error" role="alert"><CircleAlert size={18} /> {error}</p>}
       <button className="button button-primary button-full" type="submit" disabled={loading}>
         {loading ? <LoaderCircle className="spin" size={18} /> : <ArrowRight size={18} />}
-        {mode === "login" ? "Entrar" : "Criar minha conta"}
+        {mode === "login" ? t("Entrar") : t("Criar minha conta")}
       </button>
       <p className="auth-switch">
-        {mode === "login" ? "Ainda não tem uma conta? " : "Já tem uma conta? "}
-        <Link href={mode === "login" ? "/criar-conta" : `/entrar?next=${encodeURIComponent(nextPath)}`}>{mode === "login" ? "Cadastre-se" : "Entrar"}</Link>
+        {mode === "login" ? t("Ainda não tem uma conta? ") : t("Já tem uma conta? ")}
+        <Link href={mode === "login" ? "/criar-conta" : `/entrar?next=${encodeURIComponent(nextPath)}`}>{mode === "login" ? t("Cadastre-se") : t("Entrar")}</Link>
       </p>
     </form>
   );

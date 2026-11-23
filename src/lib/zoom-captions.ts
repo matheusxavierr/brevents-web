@@ -1,4 +1,5 @@
 import type { CaptionLanguage, LiveCaption } from "./api-types";
+import { translateMessage, type Locale } from "./i18n";
 
 export const captionLanguages = {
   "pt-BR": { label: "Português", short: "PT", zoom: "pt", translation: "pt-br", code: 40 },
@@ -35,13 +36,13 @@ export function captionTimestamp(timestamp: number): string {
   return new Date(timestamp < 1e12 ? timestamp * 1000 : timestamp).toISOString();
 }
 
-export function captionError(error: unknown): string {
-  if (error && typeof error === "object" && "type" in error && error.type === "OPERATION_TIMEOUT") return "O Zoom demorou para confirmar o idioma solicitado. Tente novamente se a legenda não aparecer.";
+export function captionError(error: unknown, locale: Locale = "pt"): string {
+  if (error && typeof error === "object" && "type" in error && error.type === "OPERATION_TIMEOUT") return translateMessage(locale, "O Zoom demorou para confirmar o idioma solicitado. Tente novamente se a legenda não aparecer.");
   const code = error && typeof error === "object" && "errorCode" in error ? error.errorCode : null;
-  if (code === 7300) return "Transcrição e tradução não estão habilitadas nesta conta Zoom.";
-  if (code === 7301) return "As legendas foram desativadas pelo organizador.";
-  if (code === 7304) return "A tradução não está habilitada nesta conta Zoom. A transcrição pode continuar disponível.";
-  return "Não foi possível configurar as legendas do Zoom. Tente novamente.";
+  if (code === 7300) return translateMessage(locale, "Transcrição e tradução não estão habilitadas nesta conta Zoom.");
+  if (code === 7301) return translateMessage(locale, "As legendas foram desativadas pelo organizador.");
+  if (code === 7304) return translateMessage(locale, "A tradução não está habilitada nesta conta Zoom. A transcrição pode continuar disponível.");
+  return translateMessage(locale, "Não foi possível configurar as legendas do Zoom. Tente novamente.");
 }
 
 export function assertCaptionSuccess(result: unknown): void {
