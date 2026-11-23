@@ -259,7 +259,7 @@ export function MediaDeviceSetup({ value, onChange, active = true, stopPreviewRe
             {audioDevices.map((device, index) => <option value={device.deviceId} key={device.deviceId}>{device.label || `Microfone ${index + 1}`}</option>)}
           </select>
         </div>
-        <label>
+        <label className="media-speaker-field">
           <span>Saída de áudio</span>
           <select value={speakerDevices.some((device) => device.deviceId === value.speakerDeviceId) ? value.speakerDeviceId : ""} onChange={(event) => update({ speakerDeviceId: event.target.value })}>
             <option value="">Saída padrão do sistema</option>

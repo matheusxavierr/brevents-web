@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ChevronLeft, ChevronUp, Copy, LockKeyhole, Maximize2, Mic, MicOff, Minimize2, MonitorUp, MonitorX, PhoneOff, RotateCw, Search, Settings, UserMinus, UserPlus, UserX, Users, Video, VideoOff, X } from "lucide-react";
+import { ArrowRight, Check, ChevronLeft, ChevronUp, Copy, Maximize2, Mic, MicOff, Minimize2, MonitorUp, MonitorX, PhoneOff, RotateCw, Search, Settings, UserMinus, UserPlus, UserX, Users, Video, VideoOff, X } from "lucide-react";
 import Link from "next/link";
 import { ApiError, apiClient } from "@/lib/api-client";
 import type { CaptionLanguage, LiveCaption, ParticipantDirectoryEntry, StageInvitation, ZoomJoinResponse, ZoomSession } from "@/lib/api-types";
@@ -1243,26 +1243,35 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
 
   if (state !== "joined") {
     return (
-      <div className="zoom-prejoin">
-        <span className="live-pill"><span className="live-dot" /> Sala interativa</span>
-        <h1>{state === "left" ? "Você saiu da sala" : activeRoomMode === "meeting" ? "Tudo pronto para a reunião?" : "Entre no palco ao vivo"}</h1>
-        <p>Escolha sua câmera e seu microfone. Você poderá trocar os dispositivos durante a chamada.</p>
-        <MediaDeviceSetup value={mediaPreferences} onChange={setMediaPreferences} active={state !== "joining"} stopPreviewRef={stopPreviewRef}>
-          <label><span>Idioma que vou falar</span><select required value={prejoinLanguage} onChange={(change) => {
-            const language = change.target.value as CaptionLanguage;
-            setPrejoinLanguage(language);
-            captions.selectSpokenLanguage(language);
-          }}><option value="" disabled>Selecione um idioma</option>{Object.entries(captionLanguages).map(([value, language]) => <option key={value} value={value}>{language.label}</option>)}</select></label>
-        </MediaDeviceSetup>
-        <div className="zoom-prejoin-chat-note"><LockKeyhole size={15} /><span>Chat e transcrição disponíveis ao entrar</span></div>
-        <div className="zoom-capabilities" aria-label="Recursos da sala">
-          <span><Video size={15} /> Live Meeting</span>
+      <div className="zoom-entry">
+        <div className="zoom-entry-card">
+          <header className="zoom-entry-heading">
+            <h1>{state === "left" ? "Você saiu da sala" : activeRoomMode === "meeting" ? "Prepare-se para a reunião" : "Prepare-se para entrar no evento"}</h1>
+            <p>Confira seus dispositivos e escolha o idioma que você vai falar.</p>
+          </header>
+          <MediaDeviceSetup value={mediaPreferences} onChange={setMediaPreferences} active={state !== "joining"} stopPreviewRef={stopPreviewRef}>
+            <label>
+              <span>Idioma que vou falar</span>
+              <select required value={prejoinLanguage} onChange={(change) => {
+                const language = change.target.value as CaptionLanguage;
+                setPrejoinLanguage(language);
+                captions.selectSpokenLanguage(language);
+              }}>
+                <option value="" disabled>Selecione um idioma</option>
+                {Object.entries(captionLanguages).map(([value, language]) => <option key={value} value={value}>{language.label}</option>)}
+              </select>
+            </label>
+          </MediaDeviceSetup>
+          <footer className="zoom-entry-actions">
+            <p aria-live="polite">{!prejoinLanguage ? "Selecione um idioma para continuar." : "Você pode ajustar os dispositivos durante a chamada."}</p>
+            <button type="button" className="button button-primary" onClick={join} disabled={state === "joining" || !prejoinLanguage}>
+              {state === "joining" ? "Conectando…" : state === "left" ? "Entrar novamente" : activeRoomMode === "meeting" ? "Entrar na reunião" : "Entrar na sala"}
+              <ArrowRight size={17} aria-hidden="true" />
+            </button>
+          </footer>
+          {!session.configured && <p className="zoom-setup-note">Aguardando as credenciais do Zoom Video SDK no servidor.</p>}
+          {error && <p className="live-error" role="alert">{error}</p>}
         </div>
-        <button className="button button-primary" onClick={join} disabled={state === "joining" || !prejoinLanguage}>
-          {state === "joining" ? "Conectando…" : state === "left" ? "Entrar novamente" : activeRoomMode === "meeting" ? "Entrar na reunião" : "Entrar na sala"}
-        </button>
-        {!session.configured && <p className="zoom-setup-note">Aguardando as credenciais do Zoom Video SDK no servidor.</p>}
-        {error && <p className="live-error" role="alert">{error}</p>}
       </div>
     );
   }

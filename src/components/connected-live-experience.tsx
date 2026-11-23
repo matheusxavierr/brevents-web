@@ -180,7 +180,7 @@ export function ConnectedLiveExperience({ event }: { event: EventData }) {
   if (room.zoom_session) tabs.push("transcript");
 
   return <main className="live-page">
-    <header className="live-header"><div className="container live-header-inner"><Brand /><span className="live-header-title">{event.name} · {room.name}</span><Link className="button live-networking" href={`/eventos/${event.slug}/networking`}><UsersRound size={16} /> Matchmaking</Link><button className="button live-exit" type="button" onClick={() => setExitConfirmationOpen(true)}><ChevronLeft size={16} /> Voltar pra Home</button></div></header>
+    <header className="live-header"><div className="container live-header-inner"><Brand /><span className="live-header-title">{event.name} · {room.name}</span><Link className="button live-networking" href={`/eventos/${event.slug}/networking`}><UsersRound size={16} /> Matchmaking</Link><button className="button live-exit" type="button" onClick={() => setExitConfirmationOpen(true)}><ChevronLeft size={16} /><span className="live-exit-desktop">Voltar pra Home</span><span className="live-exit-mobile">Voltar</span></button></div></header>
     <div className="live-layout">
       <section className="video-column" aria-label="Transmissão ao vivo">
         <div className="video-player">
