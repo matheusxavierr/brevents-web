@@ -12,6 +12,7 @@ import { useI18n } from "./i18n-provider";
 import { useSession } from "./session-provider";
 import { useMatchmaking, roundClock } from "./use-matchmaking";
 import { Dialog } from "./event-dashboard/shared";
+import { RoundFeedbackForm } from "./round-feedback-form";
 import styles from "./matchmaking.module.css";
 
 export function NetworkingSala({ event, roomId }: { event: EventData; roomId: string }) {
@@ -31,6 +32,7 @@ export function NetworkingSala({ event, roomId }: { event: EventData; roomId: st
   const activeRound = coordinator ? managedRoom?.round : data?.round;
   const [joinedSession, setJoinedSession] = useState<string | null>(null);
   const [requestingSupport, setRequestingSupport] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const expired = Boolean(activeRound && now >= Date.parse(activeRound.expires_at));
   const [wasAssigned, setWasAssigned] = useState(false);
   if (activeRound && !wasAssigned) setWasAssigned(true);
@@ -102,8 +104,9 @@ export function NetworkingSala({ event, roomId }: { event: EventData; roomId: st
   }
   const allowed = !room.coordinated || (data?.role === "exporter" ? data.room?.id === roomId : Boolean(activeRound && !expired && activeRound.room === roomId));
   const clock = activeRound && !expired ? roundClock(activeRound.expires_at, now) : null;
+  const pendingFeedback = data?.pending_feedback?.[0];
   return <div className={room.coordinated ? styles.roomPage : undefined}>
-    {room.coordinated && <div className={styles.roomNotice} role="status"><Building2 size={22} /><div><strong>{data?.role === "exporter" ? t("Esta é a sua sala · {company}", { company: room.company_name ?? "" }) : t("Reunião com {company}", { company: room.company_name ?? "" })}</strong><small>{activeRound && !expired ? t("{exporter} + {importer} · rodada de negócios", { exporter: activeRound.exporter.name ?? "", importer: activeRound.importer.name ?? "" }) : wasAssigned ? t("Conversa concluída. Sua empresa está disponível para a próxima conexão.") : t("Sua empresa está pronta. Aguarde a coordenação direcionar um importador.")}</small></div>{joinedSession && joinedSession === room.zoom_session?.session_name && activeRound && !expired && !coordinator && <button disabled={requestingSupport || Boolean(activeRound.support_requested_at)} onClick={() => void requestSupport()}>{activeRound.support_requested_at ? t("Suporte solicitado") : t("Pedir suporte")}</button>}{clock && <time><Clock3 size={14} /> {clock}</time>}{activeRound && !expired && <button onClick={() => setEnding(true)}>{t("Encerrar rodada")}</button>}</div>}
+    {room.coordinated && <div className={styles.roomNotice} role="status"><Building2 size={22} /><div><strong>{data?.role === "exporter" ? t("Esta é a sua sala · {company}", { company: room.company_name ?? "" }) : t("Reunião com {company}", { company: room.company_name ?? "" })}</strong><small>{activeRound && !expired ? t("{exporter} + {importer} · rodada de negócios", { exporter: activeRound.exporter.name ?? "", importer: activeRound.importer.name ?? "" }) : wasAssigned ? t("Conversa concluída. Sua empresa está disponível para a próxima conexão.") : t("Sua empresa está pronta. Aguarde a coordenação direcionar um importador.")}</small></div>{joinedSession && joinedSession === room.zoom_session?.session_name && activeRound && !expired && !coordinator && <button disabled={requestingSupport || Boolean(activeRound.support_requested_at)} onClick={() => void requestSupport()}>{activeRound.support_requested_at ? t("Suporte solicitado") : t("Pedir suporte")}</button>}{pendingFeedback && <button onClick={() => setFeedbackOpen(true)}>{t("Avaliar rodada anterior")}</button>}{clock && <time><Clock3 size={14} /> {clock}</time>}{activeRound && !expired && <button onClick={() => setEnding(true)}>{t("Encerrar rodada")}</button>}</div>}
     {allowed && !(expired && data?.role === "exporter") ? <ConnectedMeetingExperience key={room.zoom_session?.session_name} event={event} roomOverride={room} exitHref={`/eventos/${event.slug}/networking`} onExit={leaveRoom} onCallLeave={leaveRoom} exitLabel={coordinator ? t("Voltar à coordenação") : activeRound ? t("Encerrar conversa") : t("Voltar ao lobby")} autoJoin={joinedBefore && !coordinator} onCallState={(joined) => {
       setJoinedSession(joined ? room.zoom_session?.session_name ?? null : null);
       if (!joined) return;
@@ -115,5 +118,6 @@ export function NetworkingSala({ event, roomId }: { event: EventData; roomId: st
     }} /> : <main className="dashboard-loading"><LoaderCircle className="spin" /><p>{expired ? t("Conversa concluída. Voltando para a espera…") : t("Validando seu direcionamento…")}</p></main>}
     {(error || stateError) && <p className={styles.error} role="alert">{error || stateError}</p>}
     {ending && <Dialog title={t("Encerrar a rodada?")} busy={busy} onClose={() => setEnding(false)}><p>{t("O importador voltará à área de espera e a empresa ficará disponível para a próxima conversa.")}</p><div className={styles.actions}><button disabled={busy} onClick={() => setEnding(false)}>{t("Continuar conversa")}</button><button className={styles.danger} disabled={busy} onClick={() => void finish()}>{t("Encerrar conversa")}</button></div></Dialog>}
+    {feedbackOpen && pendingFeedback && data?.registration && <Dialog title={t("Avalie a rodada anterior")} onClose={() => setFeedbackOpen(false)}><RoundFeedbackForm eventId={event.id} round={pendingFeedback} registrationId={data.registration.id} onSaved={() => { setFeedbackOpen(false); void refresh(); }} onCancel={() => setFeedbackOpen(false)} /></Dialog>}
   </div>;
 }

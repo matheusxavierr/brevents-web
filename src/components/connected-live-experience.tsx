@@ -55,6 +55,8 @@ export function ConnectedLiveExperience({ event }: { event: EventData }) {
   const [question, setQuestion] = useState("");
   const [askingQuestion, setAskingQuestion] = useState(false);
   const [error, setError] = useState("");
+  const [chatNotice, setChatNotice] = useState("");
+  const pendingChat = useRef("");
   const [connected, setConnected] = useState(false);
   const [eventEnded, setEventEnded] = useState(false);
   const [exitConfirmationOpen, setExitConfirmationOpen] = useState(false);
@@ -125,6 +127,17 @@ export function ConnectedLiveExperience({ event }: { event: EventData }) {
           if (type === "chat.event" || type === "chat.send.success") {
             const nextMessage = normalizeRealtimeChatMessage(payload);
             setMessages((current) => current.some((item) => item.id === nextMessage.id) ? current : [...current, nextMessage]);
+            if (type === "chat.send.success") { setChatNotice(""); pendingChat.current = ""; }
+          }
+          if (type === "error") {
+            const chatError = payload as { code?: string; message?: string };
+            if (chatError.code === "chat.contact_blocked") {
+              setChatNotice(t("Mensagem não enviada: e-mail ou telefone não são permitidos no chat."));
+              if (pendingChat.current) setMessage(pendingChat.current);
+            } else if (chatError.code === "request.invalid") {
+              setChatNotice(chatError.message || t("Não foi possível enviar a mensagem."));
+              if (pendingChat.current) setMessage(pendingChat.current);
+            }
           }
           if (type === "question.created" || type === "question.updated") {
             const nextQuestion = payload as unknown as Question;
@@ -157,6 +170,8 @@ export function ConnectedLiveExperience({ event }: { event: EventData }) {
     formEvent.preventDefault();
     const body = message.trim();
     if (!body || !channel || socket.current?.readyState !== WebSocket.OPEN) return;
+    pendingChat.current = body;
+    setChatNotice("");
     socket.current.send(JSON.stringify(["chat.send", requestId.current++, { channel: channel.id, body }]));
     setMessage("");
   }
@@ -209,6 +224,8 @@ export function ConnectedLiveExperience({ event }: { event: EventData }) {
           {!guest && tab === "questions" && <><form className="panel-form" onSubmit={askQuestion}><label className="sr-only" htmlFor="question">{t("Pergunta")}</label><textarea id="question" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder={t("Pergunte ao palestrante")} /><small>{t("Uma pergunta a cada cinco minutos por participante.")}</small><button className="button button-primary" type="submit" disabled={askingQuestion}>{askingQuestion ? t("Enviando…") : t("Enviar pergunta")}</button></form>{questions.map((item) => <article className="question-card" key={item.id}><p>{item.content}</p><button className="vote-button" type="button" aria-pressed={item.voted} onClick={() => voteQuestion(item)}><ThumbsUp size={14} /> {t("{count} votos", { count: item.score })}</button></article>)}</>}
           {!guest && tab === "poll" && polls.map((poll) => <article className="poll-card" key={poll.id}><p><strong>{poll.question}</strong></p>{poll.options.map((option) => <button className="poll-option" type="button" key={option.id} onClick={() => votePoll(poll, option.id)}><span>{option.text}</span><span>{option.votes === null ? t("Votar") : option.votes}</span></button>)}</article>)}
         </div>
+        {!guest && tab === "chat" && <p className="chat-safety">{t("Por segurança, não é permitido compartilhar e-mail ou telefone no chat.")}</p>}
+        {!guest && tab === "chat" && chatNotice && <p className="live-error chat-notice" role="alert">{chatNotice}</p>}
         {!guest && tab === "chat" && <form className="composer" onSubmit={sendMessage}><label className="sr-only" htmlFor="chat-message">{t("Mensagem")}</label><input id="chat-message" value={message} onChange={(event) => setMessage(event.target.value)} placeholder={user ? t("Mensagem como {name}", { name: user.first_name }) : t("Escreva uma mensagem")} /><button className="icon-button" type="submit" aria-label={t("Enviar")}><Send size={17} /></button></form>}
       </aside>
     </div>

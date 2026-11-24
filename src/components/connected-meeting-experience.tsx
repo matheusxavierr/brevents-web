@@ -40,6 +40,8 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [realtimeNotice, setRealtimeNotice] = useState("");
+  const [chatNotice, setChatNotice] = useState("");
+  const pendingChat = useRef("");
   const [connected, setConnected] = useState(false);
   const [inRoom, setInRoom] = useState(false);
   const [hasJoined, setHasJoined] = useState(false);
@@ -154,6 +156,17 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
           if (type === "chat.event" || type === "chat.send.success") {
             const nextMessage = normalizeRealtimeChatMessage(payload);
             setMessages((current) => current.some((item) => item.id === nextMessage.id) ? current : [...current, nextMessage]);
+            if (type === "chat.send.success") { setChatNotice(""); pendingChat.current = ""; }
+          }
+          if (type === "error") {
+            const chatError = payload as { code?: string; message?: string };
+            if (chatError.code === "chat.contact_blocked") {
+              setChatNotice(t("Mensagem não enviada: e-mail ou telefone não são permitidos no chat."));
+              if (pendingChat.current) setMessage(pendingChat.current);
+            } else if (chatError.code === "request.invalid") {
+              setChatNotice(chatError.message || t("Não foi possível enviar a mensagem."));
+              if (pendingChat.current) setMessage(pendingChat.current);
+            }
           }
         };
         // Browsers emit `close` after an error; reconnection is centralized there.
@@ -212,6 +225,8 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
     formEvent.preventDefault();
     const body = message.trim();
     if (!body || !channel || socket.current?.readyState !== WebSocket.OPEN) return;
+    pendingChat.current = body;
+    setChatNotice("");
     socket.current.send(JSON.stringify(["chat.send", requestId.current++, { channel: channel.id, body }]));
     setMessage("");
   }
@@ -283,6 +298,8 @@ export function ConnectedMeetingExperience({ event, roomOverride, exitHref = "/"
               : <div className="meeting-panel-empty"><MessageSquare size={24} /><strong>{t("Conversa aberta")}</strong><span>{t("As mensagens da reunião aparecerão aqui.")}</span></div>)}
             {tab === "transcript" && <TranscriptPanel {...transcript} ended={!inRoom} />}
           </div>
+          {tab === "chat" && inRoom && <p className="chat-safety">{t("Por segurança, não é permitido compartilhar e-mail ou telefone no chat.")}</p>}
+          {tab === "chat" && inRoom && chatNotice && <p className="live-error chat-notice" role="alert">{chatNotice}</p>}
           {tab === "chat" && inRoom && <form className="composer" onSubmit={sendMessage}><label className="sr-only" htmlFor="meeting-chat-message">{t("Mensagem")}</label><input id="meeting-chat-message" value={message} onChange={(event) => setMessage(event.target.value)} placeholder={user ? t("Mensagem como {name}", { name: user.first_name || user.username }) : t("Escreva uma mensagem")} /><button className="icon-button" type="submit" aria-label={t("Enviar")}><Send size={17} /></button></form>}
           </>}
         </aside>

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BarChart3, Building2, CalendarDays, Check, ChevronDown, ExternalLink, Film, LayoutDashboard, LogOut, MessageSquare, Plus, Radio, RefreshCw, Settings, Users } from "lucide-react";
+import { BarChart3, Building2, CalendarDays, Check, ChevronDown, ClipboardCheck, ExternalLink, Film, LayoutDashboard, LogOut, MessageSquare, Plus, Radio, RefreshCw, Settings, Users } from "lucide-react";
 import { Brand } from "./brand";
 import { LanguageSwitcher } from "./language-switcher";
 import { useI18n } from "./i18n-provider";
@@ -16,10 +16,11 @@ import { AnalyticsPanel } from "./event-dashboard/analytics-panel";
 import { ParticipantsPanel, SettingsPanel, TransmissionPanel } from "./event-dashboard/management-panels";
 import { CoordinatorsPanel } from "./event-dashboard/coordinators-panel";
 import { CompanyRoomsPanel } from "./event-dashboard/company-rooms-panel";
+import { PostEventPanel } from "./event-dashboard/post-event-panel";
 import { dateTime, duration, Empty, listAll, mainRoom, Metric, type DashboardAction } from "./event-dashboard/shared";
 import styles from "./event-dashboard/dashboard.module.css";
 
-type Tab = "overview" | "agenda" | "stream" | "company-rooms" | "participants" | "coordinators" | "interactions" | "analytics" | "settings";
+type Tab = "overview" | "agenda" | "stream" | "company-rooms" | "participants" | "coordinators" | "interactions" | "analytics" | "post-event" | "settings";
 const navigation = [
   { id: "overview", label: "Visão geral", icon: LayoutDashboard },
   { id: "agenda", label: "Programação", icon: CalendarDays },
@@ -29,12 +30,14 @@ const navigation = [
   { id: "coordinators", label: "Coordenadores", icon: Users },
   { id: "interactions", label: "Interações", icon: MessageSquare },
   { id: "analytics", label: "Resultados", icon: BarChart3 },
+  { id: "post-event", label: "Pós-evento", icon: ClipboardCheck },
   { id: "settings", label: "Configurações", icon: Settings },
 ] as const;
 const descriptions: Record<Tab, string> = {
   overview: "Prepare e acompanhe seu evento em um só lugar.", agenda: "Organize as palestras, os horários e quem vai apresentar.",
   stream: "O palco principal e as conversas de negócios deste evento.", participants: "Inscrições, informações profissionais e controle de acesso.",
   interactions: "Crie enquetes e organize as perguntas do público.", analytics: "Audiência, participação e conexões geradas pelo evento.",
+  "post-event": "Acompanhe as avaliações das rodadas e do evento.",
   settings: "Informações públicas, inscrições e disponibilidade do evento.",
   coordinators: "Compartilhe a gestão deste evento com sua equipe.",
   "company-rooms": "Direcione importadores, acompanhe as empresas e gerencie cada conversa 1:1.",
@@ -139,6 +142,7 @@ export function OrganizerDashboard({ initialEventId, initialTab = "overview" }: 
           {tab === "coordinators" && <CoordinatorsPanel event={activeEvent} action={action} busy={busy} />}
           {tab === "interactions" && <InteractionsPanel event={activeEvent} rooms={rooms} />}
           {tab === "analytics" && <AnalyticsPanel event={activeEvent} data={analytics} />}
+          {tab === "post-event" && <PostEventPanel event={activeEvent} />}
           {tab === "settings" && <SettingsPanel event={activeEvent} action={action} busy={busy} />}
         </div>}
       </div>

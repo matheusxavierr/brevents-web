@@ -2,6 +2,8 @@
 .main { display: flex; flex: 1; min-height: 0; flex-direction: column; width: min(1480px, 100%); margin: auto; padding: 18px 24px; gap: 16px; }
 .topline, .heading, .cardTop, .actions, .pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .topline { font-size: .78rem; }
+.toplineLinks { display: inline-flex; align-items: center; gap: 14px; }
+.feedbackPrompt { flex-shrink: 0; }
 .topline a { color: #2e61c4; }
 .board { display: flex; min-height: 0; flex-direction: column; gap: 18px; }
 .page .board { flex: 1; overflow: auto; }
@@ -10,7 +12,7 @@
 .eyebrow { color: #4773c4; font-size: .64rem; letter-spacing: .12em; font-weight: 700; }
 .badge { display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; gap: 7px; padding: 7px 10px; border: 1px solid #dde5f2; border-radius: 99px; background: #f3f6fb; color: #6e7f9b; font-size: .65rem; }
 .online { background: #e7f7ef; border-color: #ceeadd; color: #26794d; }
-.metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
 .metrics > div { display: flex; align-items: center; gap: 12px; background: white; border: 1px solid #e0e7f3; border-radius: 15px; padding: 16px; }
 .metrics strong { font-size: 1.65rem; }.metrics span { font-size: .75rem; color: #7283a1; }
 .columns { display: grid; grid-template-columns: minmax(230px, .7fr) minmax(0, 2fr); gap: 18px; min-height: 0; flex: 1; }

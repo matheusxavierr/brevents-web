@@ -1,0 +1,25 @@
+.card { display: grid; gap: 14px; min-width: 0; border: 1px solid #e3eaf5; border-radius: 16px; background: #fff; padding: 18px; color: #163477; }
+.card.compact { border-radius: 12px; padding: 14px; }
+.head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.head h3, .head p { margin: 0; }
+.head h3 { font-size: .95rem; line-height: 1.3; }
+.head p { color: #7c8aa1; font-size: .72rem; margin-top: 3px; }
+.eyebrow { color: #6b7f9e; font-size: .62rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.stars { display: flex; align-items: center; gap: 4px; }
+.star { display: inline-grid; width: 34px; height: 34px; place-items: center; border: 0; border-radius: 8px; background: #f3f6fc; color: #b8c5d9; cursor: pointer; transition: background 120ms, color 120ms; }
+.star:hover { background: #fff6de; color: #efa400; }
+.star[aria-pressed="true"] { background: #fff1c7; color: #e39b00; }
+.star:disabled { cursor: wait; opacity: .6; }
+.continue { display: flex; align-items: flex-start; gap: 9px; color: #355686; font-size: .76rem; line-height: 1.4; }
+.continue input { width: 17px; height: 17px; flex: 0 0 17px; margin-top: 1px; accent-color: #135bca; }
+.continue small { display: block; color: #8796ab; font-size: .67rem; margin-top: 2px; }
+.noteToggle { justify-self: start; border: 0; background: none; color: #2b5bd7; padding: 0; cursor: pointer; font-size: .72rem; font-weight: 700; }
+.note { display: grid; gap: 6px; }
+.note textarea { width: 100%; min-height: 62px; resize: vertical; border: 1px solid #d9e3f2; border-radius: 10px; background: #fbfdff; color: #163477; padding: 10px 12px; font: inherit; font-size: .78rem; }
+.error { margin: 0; color: #b42318; font-size: .74rem; }
+.actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.primary, .secondary { display: inline-flex; min-height: 38px; align-items: center; justify-content: center; gap: 7px; border-radius: 9px; padding: 9px 14px; cursor: pointer; font-size: .74rem; font-weight: 700; }
+.primary { border: 1px solid #135bca; background: #135bca; color: white; }
+.primary:disabled { cursor: wait; opacity: .62; }
+.secondary { border: 1px solid #d7e2f2; background: white; color: #33547f; }
+.saved { display: flex; align-items: center; gap: 8px; color: #24824f; font-size: .76rem; font-weight: 600; }

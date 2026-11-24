@@ -2,6 +2,7 @@ import { authMessages } from "./messages/auth";
 import { commonMessages } from "./messages/common";
 import { dashboardMessages } from "./messages/dashboard";
 import { eventMessages } from "./messages/event";
+import { feedbackMessages } from "./messages/feedback";
 import { hubMessages } from "./messages/hub";
 import { liveMessages } from "./messages/live";
 import { marketingMessages } from "./messages/marketing";
@@ -32,6 +33,7 @@ const dictionaries: Record<Exclude<Locale, "pt">, TranslationMessages> = {
     ...marketingMessages.en,
     ...authMessages.en,
     ...eventMessages.en,
+    ...feedbackMessages.en,
     ...dashboardMessages.en,
     ...hubMessages.en,
     ...liveMessages.en,
@@ -42,6 +44,7 @@ const dictionaries: Record<Exclude<Locale, "pt">, TranslationMessages> = {
     ...marketingMessages.es,
     ...authMessages.es,
     ...eventMessages.es,
+    ...feedbackMessages.es,
     ...dashboardMessages.es,
     ...hubMessages.es,
     ...liveMessages.es,

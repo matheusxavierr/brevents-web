@@ -12,11 +12,20 @@ export async function acceptLanguageHeader() {
 
 export async function getPublicEvent(slug: string): Promise<EventData | null> {
   try {
+    const cookieStore = await cookies();
     const language = await acceptLanguageHeader();
-    const response = await fetch(`${API_URL}/public/events/${encodeURIComponent(slug)}/`, { headers: { "Accept-Language": language }, cache: "no-store" });
+    const access = cookieStore.get("brevents_access")?.value;
+    const publicHeaders: Record<string, string> = { "Accept-Language": language };
+    const publicUrl = `${API_URL}/public/events/${encodeURIComponent(slug)}/`;
+    let response = await fetch(publicUrl, {
+      headers: access ? { ...publicHeaders, Authorization: `Bearer ${access}` } : publicHeaders,
+      cache: "no-store",
+    });
+    if (!response.ok && access && (response.status === 401 || response.status === 403)) {
+      response = await fetch(publicUrl, { headers: publicHeaders, cache: "no-store" });
+    }
     if (response.ok) return (await response.json()) as EventData;
 
-    const access = (await cookies()).get("brevents_access")?.value;
     if (!access) return null;
     const headers = { Authorization: `Bearer ${access}`, "Accept-Language": language };
     const managedResponse = await fetch(`${API_URL}/events/?managed=true`, { headers, cache: "no-store" });

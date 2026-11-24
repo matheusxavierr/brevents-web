@@ -100,6 +100,7 @@ export function MyEventsPage() {
                     <Link className="button button-secondary" href={`/eventos/${event.slug}/networking`}>
                       <UsersRound size={16} /> {t("Rodada de negócios")}
                     </Link>
+                    {event.status === "ended" && <Link className="my-event-link" href={`/eventos/${event.slug}/pos-evento`}>{t("Pós-evento")}</Link>}
                     <Link className="my-event-link" href={`/eventos/${event.slug}`}>{t("Página do evento")}</Link>
                   </div>
                 </article>

@@ -192,7 +192,37 @@ export type Registration = {
 };
 
 export type MatchmakingParticipant = { id: string; name: string; company: string; matchmaking_role: "exporter" | "importer"; visited_rooms?: string[] };
-export type MatchmakingRound = { id: string; room: string; exporter: MatchmakingParticipant; importer: MatchmakingParticipant; starts_at: string; expires_at: string; ended_at: string | null; end_reason: string; support_requested_at?: string | null };
+export type RoundFeedback = {
+  id: string;
+  round: string;
+  registration: string;
+  participant?: MatchmakingParticipant;
+  rating: number;
+  wants_continue: boolean;
+  note: string;
+  submitted_at: string;
+};
+export type MatchmakingRound = {
+  id: string; room: string; exporter: MatchmakingParticipant; importer: MatchmakingParticipant;
+  starts_at: string; expires_at: string; ended_at: string | null; end_reason: string;
+  support_requested_at?: string | null; feedback?: RoundFeedback[];
+};
+export type EventFeedback = {
+  id: string; event: string; registration: string; participant_name?: string; participant_company?: string;
+  rating: number; comment: string; submitted_at: string;
+};
+export type PostEventData = {
+  event: { id: string; name: string; slug: string; status: string; starts_at: string; ends_at: string; timezone: string; started: boolean };
+  role: "coordinator" | "participant";
+  registration: MatchmakingParticipant | null;
+  rounds: MatchmakingRound[];
+  event_feedback: { mine: EventFeedback | null; responses: number; average_rating: number | null; items: EventFeedback[] };
+  summary: {
+    rounds: number; feedback_expected: number; feedback_responses: number; feedback_pending: number;
+    response_rate: number; average_rating: number | null; continue_intents: number;
+    event_feedback_responses: number; event_average_rating: number | null;
+  };
+};
 export type MatchmakingState = {
   server_time: string; open: boolean; role: "coordinator" | "exporter" | "importer";
   registration: MatchmakingParticipant | null; room: Room | null; round: MatchmakingRound | null;
@@ -201,6 +231,7 @@ export type MatchmakingState = {
   companies?: Array<{ id: string; name: string; visited: boolean }>;
   rooms?: Array<{ room: Room; exporter: MatchmakingParticipant | null; online: boolean; round: MatchmakingRound | null; exporter_connected?: boolean; importer_connected?: boolean }>;
   recent?: MatchmakingRound[];
+  pending_feedback?: MatchmakingRound[];
 };
 
 export type NetworkingPresence = {

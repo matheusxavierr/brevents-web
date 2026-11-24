@@ -2880,3 +2880,6 @@ section:nth-of-type(even) .eyebrow::before { background-image: url("/brand/star-
   .builder-header-actions { gap: 8px; }
   .builder-language select { max-width: 70px; }
 }
+
+.chat-safety { margin: 0; padding: 0 12px 6px; color: var(--muted); font-size: .62rem; line-height: 1.4; }
+.chat-notice { margin: 0 10px 8px; }

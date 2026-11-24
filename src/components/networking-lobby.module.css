@@ -85,3 +85,6 @@
   .empty { gap: 7px; }
   .empty > svg { width: 24px; height: 24px; }
 }
+
+.introActions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+@media (max-width: 640px) { .introActions { width: 100%; justify-content: space-between; } }
