@@ -55,13 +55,16 @@ export function HomeHeader() {
   }, []);
 
   useEffect(() => {
-    if (!openMenu) return;
+    if (!openMenu && !menuOpen) return;
     function closeOnOutsideClick(event: MouseEvent) {
-      if (headerRef.current && !headerRef.current.contains(event.target as Node)) setOpenMenu(null);
+      if (headerRef.current && !headerRef.current.contains(event.target as Node)) {
+        setOpenMenu(null);
+        setMenuOpen(false);
+      }
     }
     document.addEventListener("mousedown", closeOnOutsideClick);
     return () => document.removeEventListener("mousedown", closeOnOutsideClick);
-  }, [openMenu]);
+  }, [menuOpen, openMenu]);
 
   useEffect(() => {
     if (openMenu !== "eventos" || !user || myEvents !== null) return;
@@ -97,9 +100,15 @@ export function HomeHeader() {
     <header ref={headerRef} className={menuOpen ? "home-header menu-open" : "home-header"}>
       <div className="home-header-inner">
         <Brand href="/" />
-        <button className="home-menu-toggle" type="button" onClick={() => setMenuOpen((v) => !v)} aria-expanded={menuOpen} aria-label={menuOpen ? t("Fechar menu") : t("Abrir menu")}>
+        <button className="home-menu-toggle" type="button" onClick={() => {
+          setOpenMenu(null);
+          setMenuOpen((value) => !value);
+        }} aria-expanded={menuOpen} aria-controls="home-navigation" aria-label={menuOpen ? t("Fechar menu") : t("Abrir menu")}>
           {menuOpen ? <X size={22} /> : <Menu size={22} />}
         </button>
+        <div id="home-navigation" className="home-navigation" onClick={(event) => {
+          if (menuOpen && event.target instanceof Element && event.target.closest("a[href]")) setMenuOpen(false);
+        }}>
         <nav className="home-product-switcher" aria-label={t("Soluções")}>
           {user ? (
             <>
@@ -172,6 +181,7 @@ export function HomeHeader() {
               <LanguageSwitcher className="home-language" />
               <button className="home-logout" type="button" onClick={logout} aria-label={t("Sair da conta")}>
                 <LogOut size={17} />
+                <span>{t("Sair da conta")}</span>
               </button>
             </>
           ) : (
@@ -182,6 +192,7 @@ export function HomeHeader() {
             </>
           )}
         </nav>
+        </div>
       </div>
       {profileOpen && user && (
         <div className="profile-modal-backdrop" role="presentation" onMouseDown={() => setProfileOpen(false)}>
