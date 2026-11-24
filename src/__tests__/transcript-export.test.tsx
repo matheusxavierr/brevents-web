@@ -59,10 +59,11 @@ describe("transcrição e download", () => {
     expect(text).not.toContain("Hello");
     expect(text.match(/Olá, reunião/g)).toHaveLength(1);
   });
-  it("adds Web Event transcription without removing Chat, Questions or Polls", async () => {
+  it("keeps only Chat and Transcription in the Web Event room", async () => {
     render(<ConnectedLiveExperience event={event} />);
     await waitFor(() => expect(screen.getByRole("button", { name: "Entrar teste" })).toBeInTheDocument());
-    for (const name of ["Chat", "Perguntas", "Enquete", "Transcrição"]) expect(screen.getByRole("tab", { name })).toBeInTheDocument();
+    for (const name of ["Chat", "Transcrição"]) expect(screen.getByRole("tab", { name })).toBeInTheDocument();
+    for (const name of ["Perguntas", "Enquete"]) expect(screen.queryByRole("tab", { name })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Entrar teste" }));
     fireEvent.click(screen.getByRole("button", { name: "Falar teste" }));
     fireEvent.click(screen.getByRole("tab", { name: "Transcrição" }));

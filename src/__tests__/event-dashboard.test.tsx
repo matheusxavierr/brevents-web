@@ -59,14 +59,20 @@ describe("painel do evento", () => {
   it("limita inscritos a dez por página, busca empresa/cargo e mostra cadastro de conta", () => {
     const registrations: Registration[] = Array.from({ length: 11 }, (_, index) => ({ id: String(index), event: event.id, name: `Pessoa ${index}`, email: `pessoa${index}@example.com`, status: "confirmed", user: index ? index : null, ticket_code: "", profile: { company: index === 10 ? "Aurora" : "Acme", role: "Diretoria" }, created_at: event.starts_at }));
     render(<ParticipantsPanel event={event} items={registrations} action={action} busy={false} />);
-    expect(screen.getAllByRole("row")).toHaveLength(11);
+    expect(screen.getAllByRole("row")).toHaveLength(12);
     expect(screen.queryByText("Pessoa 10")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Próxima página" }));
     expect(screen.getByText("Pessoa 10")).toBeInTheDocument();
-    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "Aurora" } });
-    expect(screen.getAllByRole("row")).toHaveLength(2);
+    fireEvent.change(screen.getByRole("searchbox", { name: "Buscar participantes" }), { target: { value: "Aurora" } });
+    expect(screen.getAllByRole("row")).toHaveLength(3);
     expect(screen.getByText("Diretoria")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Página anterior" })).toBeDisabled();
+    fireEvent.change(screen.getByRole("searchbox", { name: "Buscar participantes" }), { target: { value: "" } });
+    fireEvent.change(screen.getByRole("searchbox", { name: "Empresa" }), { target: { value: "Acme" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Possui conta?" }), { target: { value: "no" } });
+    expect(screen.getAllByRole("row")).toHaveLength(3);
+    expect(screen.getByText("Pessoa 0")).toBeInTheDocument();
+    expect(screen.queryByText("Pessoa 10")).not.toBeInTheDocument();
   });
 
   it("edita um palestrante existente por modal", async () => {

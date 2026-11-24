@@ -14,12 +14,41 @@ import { ImporterEnrollment } from "./importer-enrollment";
 const registrationLabels = { confirmed: "Confirmada", pending: "Pendente", cancelled: "Cancelada", blocked: "Bloqueada" };
 export const networkingLabels: Record<string, string> = { pending: "Aguardando", accepted: "Aceita", declined: "Recusada", cancelled: "Cancelada", ended: "Encerrada" };
 const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+const participantColumns = [
+  { field: "name", label: "Nome" },
+  { field: "email", label: "E-mail" },
+  { field: "date", label: "Inscrição" },
+  { field: "account", label: "Possui conta?", options: [["yes", "Sim"], ["no", "Não"]] },
+  { field: "company", label: "Empresa" },
+  { field: "role", label: "Cargo" },
+  { field: "matchmaking", label: "Matchmaking", options: [["importer", "Importador"], ["exporter", "Exportador"]] },
+  { field: "status", label: "Status", options: Object.entries(registrationLabels) },
+] as const;
+type ParticipantColumn = (typeof participantColumns)[number]["field"];
 
 export function ParticipantsPanel({ event, items, action, busy }: { event: EventData; items: Registration[]; action: DashboardAction; busy: boolean }) {
   const { t, locale } = useI18n();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
-  const filtered = items.filter((item) => normalize(`${item.name} ${item.email} ${item.profile.company || ""} ${item.profile.role || ""}`).includes(normalize(search)));
+  const [filters, setFilters] = useState<Partial<Record<ParticipantColumn, string>>>({});
+  const filtered = items.filter((item) => {
+    const values = {
+      name: item.name, email: item.email, date: dateTime(item.created_at, event.timezone, locale),
+      account: item.user ? "yes" : "no", company: item.profile.company || "", role: item.profile.role || "",
+      matchmaking: item.matchmaking_role || "importer", status: item.status,
+    };
+    return normalize(`${values.name} ${values.email} ${values.company} ${values.role}`).includes(normalize(search.trim()))
+      && participantColumns.every((column) => {
+        const filter = filters[column.field]?.trim();
+        if (!filter) return true;
+        const value = values[column.field];
+        return "options" in column ? value === filter : normalize(value).includes(normalize(filter));
+      });
+  });
+  function filterColumn(field: ParticipantColumn, value: string) {
+    setFilters((current) => ({ ...current, [field]: value }));
+    setPage(0);
+  }
   const pages = Math.max(1, Math.ceil(filtered.length / 10));
   const safePage = Math.min(page, pages - 1);
   return <section className={styles.card}>
@@ -27,13 +56,23 @@ export function ParticipantsPanel({ event, items, action, busy }: { event: Event
     <div className={styles.toolbar}><label className={styles.search}><Search size={17} /><input type="search" aria-label={t("Buscar participantes")} placeholder={t("Nome, e-mail, empresa ou cargo")} value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); }} /></label>
       <div className={styles.pagination}><span>{t("{count} resultados · 10 por página", { count: filtered.length })}</span><button type="button" aria-label={t("Página anterior")} disabled={safePage === 0} onClick={() => setPage(safePage - 1)}><ChevronLeft size={16} /></button><span>{safePage + 1} / {pages}</span><button type="button" aria-label={t("Próxima página")} disabled={safePage >= pages - 1} onClick={() => setPage(safePage + 1)}><ChevronRight size={16} /></button></div>
     </div>
-    {filtered.length ? <div className={styles.tableWrap}><table className={styles.table}>
-      <thead><tr><th>{t("Nome")}</th><th>{t("E-mail")}</th><th>{t("Inscrição")}</th><th>{t("Possui conta?")}</th><th>{t("Empresa")}</th><th>{t("Cargo")}</th><th>{t("Matchmaking")}</th><th>{t("Status")}</th></tr></thead>
+    <div className={styles.tableWrap}><table className={styles.table}>
+      <thead><tr>{participantColumns.map((column) => <th key={column.field} scope="col">{t(column.label)}</th>)}</tr>
+        <tr className={styles.columnFilters}>{participantColumns.map((column) => <td key={column.field}>
+          {"options" in column
+            ? <select aria-label={t(column.label)} value={filters[column.field] ?? ""} onChange={(change) => filterColumn(column.field, change.target.value)}>
+              <option value="">{t("Todos")}</option>
+              {column.options.map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}
+            </select>
+            : <input type="search" aria-label={t(column.label)} placeholder={t("Filtrar")} value={filters[column.field] ?? ""} onChange={(change) => filterColumn(column.field, change.target.value)} />}
+        </td>)}</tr>
+      </thead>
       <tbody>{filtered.slice(safePage * 10, safePage * 10 + 10).map((item) => <tr key={item.id}>
         <td>{item.name}</td><td>{item.email}</td><td>{dateTime(item.created_at, event.timezone, locale)}</td><td><span className={styles.badge}>{item.user ? t("Sim") : t("Não")}</span></td><td>{item.profile.company || "—"}</td><td>{item.profile.role || "—"}</td>
         <td><select aria-label={t("Perfil de matchmaking de {name}", { name: item.name })} value={item.matchmaking_role || "importer"} disabled={busy} onChange={(change) => void action(() => apiClient(`registrations/${item.id}/`, { method: "PATCH", body: { matchmaking_role: change.target.value } }), t("Perfil atualizado. A sala do exportador é criada automaticamente."))}><option value="importer">{t("Importador")}</option><option value="exporter">{t("Exportador")}</option></select></td>
         <td><select aria-label={t("Status de {name}", { name: item.name })} value={item.status} disabled={busy} onChange={(change) => void action(() => apiClient(`registrations/${item.id}/`, { method: "PATCH", body: { status: change.target.value } }), t("Status da inscrição atualizado."))}>{Object.entries(registrationLabels).map(([value, label]) => <option value={value} key={value}>{t(label)}</option>)}</select></td>
-      </tr>)}</tbody></table></div> : <Empty>{t("Nenhum participante encontrado.")}</Empty>}
+      </tr>)}</tbody></table></div>
+    {!filtered.length && <Empty>{t("Nenhum participante encontrado.")}</Empty>}
     <p className={styles.hint}>{t("Exportadores têm uma sala por empresa; importadores aguardam o direcionamento da coordenação. Para inscrições antigas, escolha o perfil acima.")}</p>
     <p className={styles.hint}>{t("Bloquear uma inscrição impede novos acessos. A remoção de quem já está na transmissão é feita pela lista de participantes do auditório.")}</p>
   </section>;

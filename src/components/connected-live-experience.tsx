@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, FileText, Send, ThumbsUp, UsersRound } from "lucide-react";
+import { ChevronLeft, FileText, Send, UsersRound } from "lucide-react";
 import { Brand } from "./brand";
 import { LanguageSwitcher } from "./language-switcher";
 import { useI18n } from "./i18n-provider";
@@ -14,9 +14,9 @@ import { useTranscript } from "./use-transcript";
 import { TranscriptDownload, TranscriptPanel } from "./transcript-panel";
 import { useSession } from "./session-provider";
 import { apiClient } from "@/lib/api-client";
-import type { ChatChannel, ChatMessage, EventData, Paginated, Poll, Question, User } from "@/lib/api-types";
+import type { ChatChannel, ChatMessage, EventData, Paginated, User } from "@/lib/api-types";
 
-type Tab = "chat" | "questions" | "poll" | "transcript";
+type Tab = "chat" | "transcript";
 type JoinResponse = { token: string };
 
 function formatCaptionTime(intlLocale: string, value: string) {
@@ -49,11 +49,7 @@ export function ConnectedLiveExperience({ event }: { event: EventData }) {
   }, []);
   const [channel, setChannel] = useState<ChatChannel | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [polls, setPolls] = useState<Poll[]>([]);
   const [message, setMessage] = useState("");
-  const [question, setQuestion] = useState("");
-  const [askingQuestion, setAskingQuestion] = useState(false);
   const [error, setError] = useState("");
   const [chatNotice, setChatNotice] = useState("");
   const pendingChat = useRef("");
@@ -105,11 +101,6 @@ export function ConnectedLiveExperience({ event }: { event: EventData }) {
         const channels = await apiClient<Paginated<ChatChannel>>(`chat/channels/?event=${event.id}&room=${activeRoom.id}`);
         const activeChannel = channels.results[0] ?? null;
         setChannel(activeChannel);
-        const [questionData, pollData] = await Promise.all([
-          apiClient<Paginated<Question>>(`questions/?room=${activeRoom.id}`),
-          apiClient<Paginated<Poll>>(`polls/?room=${activeRoom.id}`),
-        ]);
-        setQuestions(questionData.results); setPolls(pollData.results);
         if (activeChannel) {
           const history = await apiClient<Paginated<ChatMessage>>(`chat/messages/?channel=${activeChannel.id}`);
           setMessages(history.results);
@@ -139,14 +130,6 @@ export function ConnectedLiveExperience({ event }: { event: EventData }) {
               if (pendingChat.current) setMessage(pendingChat.current);
             }
           }
-          if (type === "question.created" || type === "question.updated") {
-            const nextQuestion = payload as unknown as Question;
-            setQuestions((current) => [...current.filter((item) => item.id !== nextQuestion.id), nextQuestion]);
-          }
-          if (type === "poll.updated") {
-            const nextPoll = payload as unknown as Poll;
-            setPolls((current) => [...current.filter((item) => item.id !== nextPoll.id), nextPoll]);
-          }
         };
         ws.onerror = () => setError(t("A conexão em tempo real foi interrompida. Recarregue a página para tentar novamente."));
         ws.onclose = () => setConnected(false);
@@ -161,7 +144,7 @@ export function ConnectedLiveExperience({ event }: { event: EventData }) {
 
   useEffect(() => {
     const content = transcriptContent.current;
-    if (!content || (tab !== "chat" && tab !== "transcript")) return;
+    if (!content) return;
     const frame = requestAnimationFrame(() => content.scrollTo({ top: content.scrollHeight, behavior: "smooth" }));
     return () => cancelAnimationFrame(frame);
   }, [messages, tab, transcript.captions]);
@@ -176,31 +159,10 @@ export function ConnectedLiveExperience({ event }: { event: EventData }) {
     setMessage("");
   }
 
-  async function askQuestion(formEvent: FormEvent) {
-    formEvent.preventDefault();
-    if (!room || !question.trim() || askingQuestion) return;
-    setAskingQuestion(true); setError("");
-    try {
-      const created = await apiClient<Question>("questions/", { method: "POST", body: { room: room.id, content: question.trim() } });
-      setQuestions((current) => [...current, created]); setQuestion("");
-    } catch (reason) { setError(reason instanceof Error ? reason.message : t("Não foi possível enviar sua pergunta.")); }
-    finally { setAskingQuestion(false); }
-  }
-
-  async function voteQuestion(item: Question) {
-    const result = await apiClient<{ voted: boolean; score: number }>(`questions/${item.id}/vote/`, { method: "POST" });
-    setQuestions((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, ...result } : candidate));
-  }
-
-  async function votePoll(poll: Poll, optionId: string) {
-    const updated = await apiClient<Poll>(`polls/${poll.id}/vote/`, { method: "POST", body: { option_ids: [optionId] } });
-    setPolls((current) => current.map((candidate) => candidate.id === poll.id ? updated : candidate));
-  }
-
   if (eventEnded) return <EventUnavailable ended actions={hasJoined ? <><TranscriptDownload {...transcript} />{transcript.error && <p role="alert">{transcript.error}</p>}</> : undefined} />;
   if (!room) return <main className="empty-state"><h1>{t("Nenhuma sala disponível")}</h1><Link className="button button-secondary" href={`/eventos/${event.slug}`}>{t("Voltar ao evento")}</Link></main>;
 
-  const tabs: Tab[] = guest ? ["chat"] : ["chat", "questions", "poll"];
+  const tabs: Tab[] = ["chat"];
   if (room.zoom_session) tabs.push("transcript");
 
   return <main className="live-page">
@@ -215,14 +177,12 @@ export function ConnectedLiveExperience({ event }: { event: EventData }) {
       </section>
       <aside className="interaction-panel">
         <div className={`interaction-tabs${room.zoom_session ? " event-interaction-tabs" : ""}`} role="tablist">
-          {tabs.map((item) => <button key={item} className={`interaction-tab${tab === item ? " active" : ""}`} role="tab" aria-selected={tab === item} onClick={() => setTab(item)}>{item === "transcript" && <FileText size={15} />}{item === "chat" ? t("Chat") : item === "questions" ? t("Perguntas") : item === "poll" ? t("Enquete") : t("Transcrição")}</button>)}
+          {tabs.map((item) => <button key={item} className={`interaction-tab${tab === item ? " active" : ""}`} role="tab" aria-selected={tab === item} onClick={() => setTab(item)}>{item === "transcript" && <FileText size={15} />}{item === "chat" ? t("Chat") : t("Transcrição")}</button>)}
         </div>
         <div className="interaction-content" ref={transcriptContent}>
           {tab === "transcript" && (hasJoined ? <TranscriptPanel {...transcript} ended={!inRoom} /> : <div className="meeting-panel-empty"><FileText size={24} /><strong>{t("Transcrição do evento")}</strong><span>{t("Entre na sala para acompanhar as falas.")}</span></div>)}
-          {guest && tab === "chat" && <div className="guest-interaction"><p className="eyebrow">{t("Modo espectador")}</p><h2>{t("Quer participar da conversa?")}</h2><p>{t("Crie uma conta gratuita para usar chat, perguntas e receber convites para subir ao palco.")}</p><Link className="button button-primary" href={`/criar-conta?next=/eventos/${event.slug}/ao-vivo`}>{t("Criar conta")}</Link><Link className="button button-secondary" href={`/entrar?next=/eventos/${event.slug}/ao-vivo`}>{t("Já tenho conta")}</Link></div>}
+          {guest && tab === "chat" && <div className="guest-interaction"><p className="eyebrow">{t("Modo espectador")}</p><h2>{t("Quer participar da conversa?")}</h2><Link className="button button-primary" href={`/criar-conta?next=/eventos/${event.slug}/ao-vivo`}>{t("Criar conta")}</Link><Link className="button button-secondary" href={`/entrar?next=/eventos/${event.slug}/ao-vivo`}>{t("Já tenho conta")}</Link></div>}
           {!guest && tab === "chat" && messages.map((item) => <article className="message" key={item.id}><span className="avatar">{(item.sender?.first_name || item.sender?.name || item.sender?.username || "?").slice(0, 2).toUpperCase()}</span><div><strong>{item.sender ? item.sender.name || `${item.sender.first_name ?? ""} ${item.sender.last_name ?? ""}`.trim() || item.sender.username : t("Participante")}</strong><time>{formatCaptionTime(intlLocale, item.created_at)}</time><p>{item.body}</p></div></article>)}
-          {!guest && tab === "questions" && <><form className="panel-form" onSubmit={askQuestion}><label className="sr-only" htmlFor="question">{t("Pergunta")}</label><textarea id="question" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder={t("Pergunte ao palestrante")} /><small>{t("Uma pergunta a cada cinco minutos por participante.")}</small><button className="button button-primary" type="submit" disabled={askingQuestion}>{askingQuestion ? t("Enviando…") : t("Enviar pergunta")}</button></form>{questions.map((item) => <article className="question-card" key={item.id}><p>{item.content}</p><button className="vote-button" type="button" aria-pressed={item.voted} onClick={() => voteQuestion(item)}><ThumbsUp size={14} /> {t("{count} votos", { count: item.score })}</button></article>)}</>}
-          {!guest && tab === "poll" && polls.map((poll) => <article className="poll-card" key={poll.id}><p><strong>{poll.question}</strong></p>{poll.options.map((option) => <button className="poll-option" type="button" key={option.id} onClick={() => votePoll(poll, option.id)}><span>{option.text}</span><span>{option.votes === null ? t("Votar") : option.votes}</span></button>)}</article>)}
         </div>
         {!guest && tab === "chat" && <p className="chat-safety">{t("Por segurança, não é permitido compartilhar e-mail ou telefone no chat.")}</p>}
         {!guest && tab === "chat" && chatNotice && <p className="live-error chat-notice" role="alert">{chatNotice}</p>}
