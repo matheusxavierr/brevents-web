@@ -581,13 +581,11 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
         leaveOnPageUnload: true,
         enforceVirtualBackground: true,
       }).then((result) => ensureZoomSuccess(result, t));
+      await initialization;
       let presence: ZoomPresenceResponse | null = null;
       if (!guest) {
         try {
-          [presence] = await Promise.all([
-            apiClient<ZoomPresenceResponse>(`zoom-sessions/${session.id}/presence/claim/`, { method: "POST" }),
-            initialization,
-          ]);
+          presence = await apiClient<ZoomPresenceResponse>(`zoom-sessions/${session.id}/presence/claim/`, { method: "POST" });
           presenceToken.current = presence.token;
         } catch (presenceError) {
           if (presenceError instanceof ApiError && presenceError.status === 409) {
@@ -598,8 +596,6 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
           }
           throw presenceError;
         }
-      } else {
-        await initialization;
       }
       await client.join(
         credentials.session_name,
@@ -614,7 +610,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
             body: { token: presence.token },
           }).catch(async (presenceError) => {
             console.error("A presença desta conexão expirou.", presenceError);
-            if (!(presenceError instanceof ApiError) || presenceError.status !== 409) return;
+            if (!(presenceError instanceof ApiError) || presenceError.status !== 409 || presenceToken.current !== presence.token) return;
             if (presenceHeartbeatTimer.current) clearInterval(presenceHeartbeatTimer.current);
             presenceHeartbeatTimer.current = null;
             presenceToken.current = "";
@@ -622,7 +618,7 @@ export function ZoomVideoRoom({ session, eventId, guest = false, roomMode = "eve
             setState("duplicate");
             onJoinedChange?.(false);
           });
-        }, Math.max(10_000, (presence.expires_in - 20) * 1_000));
+        }, 15_000);
       }
       const stream = client.getMediaStream();
       streamRef.current = stream;

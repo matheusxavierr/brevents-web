@@ -13,7 +13,8 @@ import { ZoomVideoRoom } from "./zoom-video-room";
 import { useTranscript } from "./use-transcript";
 import { TranscriptDownload, TranscriptPanel } from "./transcript-panel";
 import { useSession } from "./session-provider";
-import { apiClient } from "@/lib/api-client";
+import { ApiError, apiClient } from "@/lib/api-client";
+import { isFatalRealtimeClose, realtimeReconnectDelay, websocketBaseUrl } from "@/lib/realtime";
 import type { ChatChannel, ChatMessage, EventData, Paginated, User } from "@/lib/api-types";
 
 type Tab = "chat" | "transcript";
@@ -54,6 +55,7 @@ export function ConnectedLiveExperience({ event }: { event: EventData }) {
   const [chatNotice, setChatNotice] = useState("");
   const pendingChat = useRef("");
   const [connected, setConnected] = useState(false);
+  const [realtimeNotice, setRealtimeNotice] = useState("");
   const [eventEnded, setEventEnded] = useState(false);
   const [exitConfirmationOpen, setExitConfirmationOpen] = useState(false);
   const socket = useRef<WebSocket | null>(null);
@@ -82,6 +84,14 @@ export function ConnectedLiveExperience({ event }: { event: EventData }) {
     if (!publicRoom) return;
     const activePublicRoom = publicRoom;
     let cancelled = false;
+    let admitted = false;
+    let reconnectAttempt = 0;
+    let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+    function reconnect() {
+      if (cancelled) return;
+      setRealtimeNotice(t("Reconectando o chat…"));
+      reconnectTimer = setTimeout(() => { void load(); }, realtimeReconnectDelay(reconnectAttempt++));
+    }
     async function load() {
       try {
         if (!sessionUser) {
@@ -93,6 +103,8 @@ export function ConnectedLiveExperience({ event }: { event: EventData }) {
         if (cancelled) return;
         setUser(sessionUser);
         const join = await apiClient<JoinResponse>(`events/${event.id}/join-token/`, { method: "POST" });
+        if (cancelled) return;
+        admitted = true;
         setAccessGranted(true);
         const roomData = await apiClient<Paginated<NonNullable<typeof publicRoom>>>(`rooms/?event=${event.id}`);
         const activeRoom = roomData.results.find((item) => item.id === activePublicRoom.id) ?? roomData.results[0];
@@ -105,11 +117,15 @@ export function ConnectedLiveExperience({ event }: { event: EventData }) {
           const history = await apiClient<Paginated<ChatMessage>>(`chat/messages/?channel=${activeChannel.id}`);
           setMessages(history.results);
         }
-        const wsBase = process.env.NEXT_PUBLIC_BREVENTS_WS_URL ?? "ws://127.0.0.1:8000/ws";
+        if (cancelled) return;
+        const wsBase = websocketBaseUrl(process.env.NEXT_PUBLIC_BREVENTS_WS_URL);
         const ws = new WebSocket(`${wsBase}/events/${event.id}/?token=${encodeURIComponent(join.token)}`);
         socket.current = ws;
         ws.onopen = () => {
+          if (cancelled) return;
+          reconnectAttempt = 0;
           setConnected(true);
+          setRealtimeNotice("");
           ws.send(JSON.stringify(["room.join", requestId.current++, { room: activeRoom.id }]));
           if (activeChannel) ws.send(JSON.stringify(["chat.subscribe", requestId.current++, { channel: activeChannel.id }]));
         };
@@ -131,15 +147,28 @@ export function ConnectedLiveExperience({ event }: { event: EventData }) {
             }
           }
         };
-        ws.onerror = () => setError(t("A conexão em tempo real foi interrompida. Recarregue a página para tentar novamente."));
-        ws.onclose = () => setConnected(false);
+        ws.onclose = (closeEvent) => {
+          if (socket.current === ws) socket.current = null;
+          if (cancelled) return;
+          setConnected(false);
+          if (isFatalRealtimeClose(closeEvent.code)) {
+            setRealtimeNotice(t("A conexão em tempo real foi interrompida. Recarregue a página para tentar novamente."));
+            return;
+          }
+          reconnect();
+        };
       } catch (reason) {
+        if (cancelled) return;
+        if (admitted && !(reason instanceof ApiError && [401, 403, 404].includes(reason.status))) {
+          reconnect();
+          return;
+        }
         const message = reason instanceof Error ? reason.message : t("Não foi possível entrar nesta sala.");
         setError(message);
       }
     }
     load();
-    return () => { cancelled = true; socket.current?.close(); };
+    return () => { cancelled = true; clearTimeout(reconnectTimer); socket.current?.close(); };
   }, [event.access_mode, event.id, publicRoom, router, sessionUser, t]);
 
   useEffect(() => {
@@ -174,6 +203,7 @@ export function ConnectedLiveExperience({ event }: { event: EventData }) {
         </div>
         <div className="session-bar"><div><h2>{session?.title ?? event.name}</h2><p>{room.name} · {guest ? t("modo espectador") : connected ? t("conectado em tempo real") : t("conectando...")}</p></div></div>
         {error && <p className="live-error" role="alert">{error} <Link href={`/eventos/${event.slug}/inscricao`}>{t("Ver inscrição")}</Link></p>}
+        {realtimeNotice && <p className="live-error" role="status">{realtimeNotice}</p>}
       </section>
       <aside className="interaction-panel">
         <div className={`interaction-tabs${room.zoom_session ? " event-interaction-tabs" : ""}`} role="tablist">
