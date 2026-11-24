@@ -138,7 +138,7 @@ export function OrganizerDashboard({ initialEventId, initialTab = "overview" }: 
           {tab === "agenda" && <AgendaPanel event={activeEvent} rooms={rooms} sessions={sessions} speakers={speakers} action={action} busy={busy} />}
           {tab === "stream" && <TransmissionPanel event={activeEvent} rooms={rooms} analytics={analytics} action={action} busy={busy} />}
           {tab === "company-rooms" && <CompanyRoomsPanel event={activeEvent} rooms={rooms} registrations={registrations} action={action} busy={busy} />}
-          {tab === "participants" && <ParticipantsPanel event={activeEvent} items={registrations} action={action} busy={busy} />}
+          {tab === "participants" && <ParticipantsPanel key={activeEvent.id} event={activeEvent} items={registrations} action={action} busy={busy} />}
           {tab === "coordinators" && <CoordinatorsPanel event={activeEvent} action={action} busy={busy} />}
           {tab === "interactions" && <InteractionsPanel event={activeEvent} rooms={rooms} />}
           {tab === "analytics" && <AnalyticsPanel event={activeEvent} data={analytics} />}

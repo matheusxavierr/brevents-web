@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, ExternalLink, Radio, Search, Settings, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, ExternalLink, Pencil, Radio, Search, Settings, Trash2, Users } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { ensureEventAuditorium } from "@/lib/event-room";
 import type { Analytics, EventData, Registration, Room } from "@/lib/api-types";
@@ -31,6 +31,8 @@ export function ParticipantsPanel({ event, items, action, busy }: { event: Event
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [filters, setFilters] = useState<Partial<Record<ParticipantColumn, string>>>({});
+  const [editor, setEditor] = useState<{ item: Registration; mode: "edit" | "delete" } | null>(null);
+  const [editorError, setEditorError] = useState("");
   const filtered = items.filter((item) => {
     const values = {
       name: item.name, email: item.email, date: dateTime(item.created_at, event.timezone, locale),
@@ -49,6 +51,30 @@ export function ParticipantsPanel({ event, items, action, busy }: { event: Event
     setFilters((current) => ({ ...current, [field]: value }));
     setPage(0);
   }
+  function openEditor(item: Registration, mode: "edit" | "delete") {
+    setEditorError("");
+    setEditor({ item, mode });
+  }
+  async function saveParticipant(formEvent: FormEvent<HTMLFormElement>) {
+    formEvent.preventDefault();
+    if (!editor) return;
+    const form = new FormData(formEvent.currentTarget);
+    const { item, mode } = editor;
+    const deleting = mode === "delete";
+    const saved = await action(
+      () => apiClient(`registrations/${item.id}/`, deleting ? { method: "DELETE" } : {
+        method: "PATCH",
+        body: {
+          name: String(form.get("name")).trim(),
+          email: String(form.get("email")).trim(),
+          profile: { ...item.profile, company: String(form.get("company")).trim(), role: String(form.get("role")).trim() },
+        },
+      }),
+      deleting ? t("Participante excluído do evento.") : t("Dados do participante atualizados."),
+      (reason) => setEditorError(reason instanceof Error ? reason.message : t("Não foi possível salvar.")),
+    );
+    if (saved) setEditor(null);
+  }
   const pages = Math.max(1, Math.ceil(filtered.length / 10));
   const safePage = Math.min(page, pages - 1);
   return <section className={styles.card}>
@@ -57,7 +83,7 @@ export function ParticipantsPanel({ event, items, action, busy }: { event: Event
       <div className={styles.pagination}><span>{t("{count} resultados · 10 por página", { count: filtered.length })}</span><button type="button" aria-label={t("Página anterior")} disabled={safePage === 0} onClick={() => setPage(safePage - 1)}><ChevronLeft size={16} /></button><span>{safePage + 1} / {pages}</span><button type="button" aria-label={t("Próxima página")} disabled={safePage >= pages - 1} onClick={() => setPage(safePage + 1)}><ChevronRight size={16} /></button></div>
     </div>
     <div className={styles.tableWrap}><table className={styles.table}>
-      <thead><tr>{participantColumns.map((column) => <th key={column.field} scope="col">{t(column.label)}</th>)}</tr>
+      <thead><tr>{participantColumns.map((column) => <th key={column.field} scope="col">{t(column.label)}</th>)}<th scope="col">{t("Ações")}</th></tr>
         <tr className={styles.columnFilters}>{participantColumns.map((column) => <td key={column.field}>
           {"options" in column
             ? <select aria-label={t(column.label)} value={filters[column.field] ?? ""} onChange={(change) => filterColumn(column.field, change.target.value)}>
@@ -65,14 +91,34 @@ export function ParticipantsPanel({ event, items, action, busy }: { event: Event
               {column.options.map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}
             </select>
             : <input type="search" aria-label={t(column.label)} placeholder={t("Filtrar")} value={filters[column.field] ?? ""} onChange={(change) => filterColumn(column.field, change.target.value)} />}
-        </td>)}</tr>
+        </td>)}<td /></tr>
       </thead>
       <tbody>{filtered.slice(safePage * 10, safePage * 10 + 10).map((item) => <tr key={item.id}>
         <td>{item.name}</td><td>{item.email}</td><td>{dateTime(item.created_at, event.timezone, locale)}</td><td><span className={styles.badge}>{item.user ? t("Sim") : t("Não")}</span></td><td>{item.profile.company || "—"}</td><td>{item.profile.role || "—"}</td>
         <td><select aria-label={t("Perfil de matchmaking de {name}", { name: item.name })} value={item.matchmaking_role || "importer"} disabled={busy} onChange={(change) => void action(() => apiClient(`registrations/${item.id}/`, { method: "PATCH", body: { matchmaking_role: change.target.value } }), t("Perfil atualizado. A sala do exportador é criada automaticamente."))}><option value="importer">{t("Importador")}</option><option value="exporter">{t("Exportador")}</option></select></td>
         <td><select aria-label={t("Status de {name}", { name: item.name })} value={item.status} disabled={busy} onChange={(change) => void action(() => apiClient(`registrations/${item.id}/`, { method: "PATCH", body: { status: change.target.value } }), t("Status da inscrição atualizado."))}>{Object.entries(registrationLabels).map(([value, label]) => <option value={value} key={value}>{t(label)}</option>)}</select></td>
+        <td><div className={styles.rowActions}>
+          <button type="button" className={styles.secondary} title={t("Editar")} aria-label={t("Editar {name}", { name: item.name })} disabled={busy} onClick={() => openEditor(item, "edit")}><Pencil size={16} aria-hidden="true" /></button>
+          <button type="button" className={styles.danger} title={t("Excluir")} aria-label={t("Excluir {name}", { name: item.name })} disabled={busy} onClick={() => openEditor(item, "delete")}><Trash2 size={16} aria-hidden="true" /></button>
+        </div></td>
       </tr>)}</tbody></table></div>
     {!filtered.length && <Empty>{t("Nenhum participante encontrado.")}</Empty>}
+    {editor && <Dialog title={editor.mode === "delete" ? t("Excluir participante") : t("Editar participante")} busy={busy} onClose={() => setEditor(null)}>
+      <form onSubmit={(formEvent) => void saveParticipant(formEvent)}>
+        {editor.mode === "delete" ? <p>{t("Excluir a inscrição de {name} deste evento? A conta no BR Events será preservada.", { name: editor.item.name })}</p> :
+          <div className={styles.formGrid}>
+            <label className={styles.field}>{t("Nome")}<input name="name" defaultValue={editor.item.name} required maxLength={200} disabled={busy} /></label>
+            <label className={styles.field}>{t("E-mail")}<input name="email" type="email" defaultValue={editor.item.email} required maxLength={254} disabled={busy} /></label>
+            <label className={styles.field}>{t("Empresa")}<input name="company" defaultValue={editor.item.profile.company ?? ""} required={editor.item.matchmaking_role === "exporter"} maxLength={120} disabled={busy} /></label>
+            <label className={styles.field}>{t("Cargo")}<input name="role" defaultValue={editor.item.profile.role ?? ""} maxLength={120} disabled={busy} /></label>
+          </div>}
+        {editorError && <p role="alert">{editorError}</p>}
+        <div className={styles.rowActions}>
+          <button className={styles.secondary} type="button" onClick={() => setEditor(null)} disabled={busy}>{t("Cancelar")}</button>
+          <button className={editor.mode === "delete" ? styles.danger : styles.primary} type="submit" disabled={busy}>{editor.mode === "delete" ? t("Excluir") : t("Salvar")}</button>
+        </div>
+      </form>
+    </Dialog>}
     <p className={styles.hint}>{t("Exportadores têm uma sala por empresa; importadores aguardam o direcionamento da coordenação. Para inscrições antigas, escolha o perfil acima.")}</p>
     <p className={styles.hint}>{t("Bloquear uma inscrição impede novos acessos. A remoção de quem já está na transmissão é feita pela lista de participantes do auditório.")}</p>
   </section>;

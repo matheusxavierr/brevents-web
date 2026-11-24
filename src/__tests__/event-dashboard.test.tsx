@@ -86,6 +86,26 @@ describe("painel do evento", () => {
     await waitFor(() => expect(api).toHaveBeenCalledWith("speakers/speaker/", expect.objectContaining({ method: "PATCH", body: expect.objectContaining({ name: "Ana Lima" }) })));
   });
 
+  it("edita e confirma a exclusão de uma inscrição pela tabela", async () => {
+    api.mockResolvedValue({});
+    const participant: Registration = { id: "guest", event: event.id, name: "Ana", email: "ana@example.com", user: 1,
+      status: "confirmed", ticket_code: "", profile: { company: "Acme", role: "Diretora" }, created_at: event.starts_at };
+    render(<ParticipantsPanel event={event} items={[participant]} action={action} busy={false} />);
+    fireEvent.click(screen.getByRole("button", { name: "Editar Ana" }));
+    const editor = screen.getByRole("dialog", { name: "Editar participante" });
+    fireEvent.change(within(editor).getByLabelText("Nome"), { target: { value: "Ana Lima" } });
+    fireEvent.click(within(editor).getByRole("button", { name: "Salvar" }));
+    await waitFor(() => expect(editor).not.toBeInTheDocument());
+    expect(api).toHaveBeenCalledWith("registrations/guest/", { method: "PATCH", body: {
+      name: "Ana Lima", email: "ana@example.com", profile: { company: "Acme", role: "Diretora" },
+    } });
+    api.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Excluir Ana" }));
+    expect(api).not.toHaveBeenCalled();
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Excluir participante" })).getByRole("button", { name: "Excluir" }));
+    await waitFor(() => expect(api).toHaveBeenCalledWith("registrations/guest/", { method: "DELETE" }));
+  });
+
   it("confirma o encerramento antes de chamar a API", async () => {
     api.mockResolvedValue({});
     render(<SettingsPanel event={event} action={action} busy={false} />);
