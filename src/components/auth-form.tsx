@@ -27,7 +27,7 @@ export function AuthForm({ mode, nextPath = "/" }: { mode: "login" | "register";
         setError(response.status === 401 ? t("E-mail ou senha inválidos.") : readError(data));
         return;
       }
-      const destination = nextPath.startsWith("/") ? nextPath : "/";
+      const destination = typeof nextPath === "string" && /^\/(?![\/\\])/.test(nextPath) && !/[\\\s]/.test(nextPath) ? nextPath : "/";
       window.location.replace(destination);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : t("Não foi possível concluir o acesso."));
